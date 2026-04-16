@@ -1,8 +1,10 @@
 import os
 import threading
-from typing import Dict, Union, Any
+from typing import Dict, Union, Any, Optional
+import urllib.request
 
 import cv2
+import numpy as np
 from PIL import Image
 # Ensure tf-keras backend is configured before importing deepface if possible.
 os.environ["TF_USE_LEGACY_KERAS"] = "1"
@@ -15,6 +17,7 @@ class FaceEngine:
     Singleton Backend for Face Detection and Recognition.
     Handles the initialization of ML models and the processing
     of similarity comparisons using DeepFace (ArcFace & RetinaFace).
+    Also includes a fast OpenCV DNN-based face extraction module.
     """
 
     _instance = None
@@ -34,6 +37,17 @@ class FaceEngine:
         self.model_name = "ArcFace"
         self.detector_backend = "retinaface"
         self.distance_metric = "cosine"
+        
+        # Extraction Model Paths (stored in src/models to keep root clean)
+        self.models_dir = os.path.join(os.path.dirname(__file__), "models")
+        self.prototxt_path = os.path.join(self.models_dir, "deploy.prototxt")
+        self.caffemodel_path = os.path.join(self.models_dir, "res10_300x300_ssd_iter_140000.caffemodel")
+        
+        # URLs for extraction models
+        self.prototxt_url = "https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt"
+        self.caffemodel_url = "https://raw.githubusercontent.com/opencv/opencv_3rdparty/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel"
+        
+        self.extraction_net = None
         self._initialized = True
 
     def initialize_models(self) -> None:
@@ -46,6 +60,72 @@ class FaceEngine:
             DeepFace.build_model(model_name=self.model_name)
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Face Models: {e}")
+
+    def _ensure_extraction_models(self) -> None:
+        """Downloads the OpenCV DNN face detection models if missing."""
+        if not os.path.exists(self.models_dir):
+            os.makedirs(self.models_dir)
+
+        if not os.path.exists(self.prototxt_path):
+            urllib.request.urlretrieve(self.prototxt_url, self.prototxt_path)
+
+        if not os.path.exists(self.caffemodel_path):
+            urllib.request.urlretrieve(self.caffemodel_url, self.caffemodel_path)
+
+        if self.extraction_net is None:
+            self.extraction_net = cv2.dnn.readNetFromCaffe(self.prototxt_path, self.caffemodel_path)
+
+    def extract_face(self, input_path: str, output_path: str, padding: float = 0.175) -> float:
+        """
+        Fast face extraction using OpenCV DNN module.
+        Returns the confidence score of the detection.
+        """
+        self._ensure_extraction_models()
+        
+        image = cv2.imread(input_path)
+        if image is None:
+            raise FileNotFoundError(f"Could not read image: {input_path}")
+
+        h, w = image.shape[:2]
+
+        # Prepare blob
+        blob = cv2.dnn.blobFromImage(
+            cv2.resize(image, (300, 300)),
+            scalefactor=1.0,
+            size=(300, 300),
+            mean=(104.0, 177.0, 123.0),
+        )
+        self.extraction_net.setInput(blob)
+        detections = self.extraction_net.forward()
+
+        best = None
+        best_confidence = 0.0
+
+        for i in range(detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.5 and confidence > best_confidence:
+                best_confidence = confidence
+                best = detections[0, 0, i, 3:7]
+
+        if best is None:
+            raise RuntimeError("No face detected in the image.")
+
+        # Scale and crop
+        x1, y1, x2, y2 = (best * np.array([w, h, w, h])).astype(int)
+        face_w, face_h = x2 - x1, y2 - y1
+
+        # Apply padding
+        pad_x = int(face_w * padding)
+        pad_y = int(face_h * padding)
+        x1 = max(0, x1 - pad_x)
+        y1 = max(0, y1 - pad_y)
+        x2 = min(w, x2 + pad_x)
+        y2 = min(h, y2 + pad_y)
+
+        face_crop = image[y1:y2, x1:x2]
+        cv2.imwrite(output_path, face_crop)
+        
+        return float(best_confidence)
 
     def validate_image_file(self, image_path: str) -> None:
         """

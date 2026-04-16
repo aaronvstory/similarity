@@ -27,6 +27,7 @@ class ProCLI:
         self.engine = FaceEngine()
         self.img1_keyword = "extracted"
         self.img2_keyword = "selfie"
+        self.extraction_keyword = "front"
         self.models_initialized = False
 
     def _ensure_models_initialized(self):
@@ -86,29 +87,34 @@ class ProCLI:
         while True:
             console.print("\n[bold]Main Menu[/bold]")
             console.print("1. Single Comparison")
-            console.print("2. Batch Folder Processing")
-            console.print("3. Settings")
-            console.print("4. Exit")
+            console.print("2. Batch Folder Similarity Check")
+            console.print("3. Batch Face Extraction")
+            console.print("4. Settings")
+            console.print("5. Exit")
             
-            choice = Prompt.ask("Choose an option", choices=["1", "2", "3", "4"], default="1")
+            choice = Prompt.ask("Choose an option", choices=["1", "2", "3", "4", "5"], default="1")
             
             if choice == "1":
                 self._run_single_comparison()
             elif choice == "2":
                 self._run_batch_processing()
             elif choice == "3":
-                self._run_settings()
+                self._run_batch_extraction()
             elif choice == "4":
+                self._run_settings()
+            elif choice == "5":
                 console.print("[green]Exiting...[/green]")
                 break
 
     def _run_settings(self):
         console.print("\n[bold magenta]--- Settings ---[/bold magenta]")
-        console.print(f"Current Image 1 Regex/Keyword: [green]{self.img1_keyword}[/green]")
-        console.print(f"Current Image 2 Regex/Keyword: [green]{self.img2_keyword}[/green]")
+        console.print(f"Current Similarity Img 1 Keyword: [green]{self.img1_keyword}[/green]")
+        console.print(f"Current Similarity Img 2 Keyword: [green]{self.img2_keyword}[/green]")
+        console.print(f"Current Extraction Keyword: [green]{self.extraction_keyword}[/green]")
         
-        self.img1_keyword = Prompt.ask("Enter new keyword/regex for Image 1", default=self.img1_keyword)
-        self.img2_keyword = Prompt.ask("Enter new keyword/regex for Image 2", default=self.img2_keyword)
+        self.img1_keyword = Prompt.ask("Enter new keyword/regex for Similarity Img 1", default=self.img1_keyword)
+        self.img2_keyword = Prompt.ask("Enter new keyword/regex for Similarity Img 2", default=self.img2_keyword)
+        self.extraction_keyword = Prompt.ask("Enter new keyword/regex for Extraction", default=self.extraction_keyword)
         console.print("[bold green]Settings updated successfully![/bold green]")
 
     def _run_single_comparison(self, img1_path: Optional[str] = None, img2_path: Optional[str] = None) -> None:
@@ -140,6 +146,71 @@ class ProCLI:
             result = self.engine.compare_images(img1_path, img2_path)
 
         self._display_result(result)
+
+    def _run_batch_extraction(self):
+        console.print("[yellow]Please select the root directory for batch extraction...[/yellow]")
+        root_dir = self.prompt_for_directory("Select Root Directory")
+        if not root_dir:
+            console.print("[bold red]Action cancelled. No directory selected.[/bold red]")
+            return
+
+        console.print(f"Scanning directory recursively for '{self.extraction_keyword}': [green]{root_dir}[/green]")
+        
+        files_to_process = []
+        valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.webp')
+
+        for dirpath, dirnames, filenames in os.walk(root_dir):
+            # Check if extraction already exists
+            existing_extracted = any(f.lower().startswith("extracted.") and f.lower().endswith(valid_extensions) for f in filenames)
+            if existing_extracted:
+                continue
+
+            # Find matching file
+            matching_file = self._find_image_with_keyword(dirpath, self.extraction_keyword)
+            if matching_file:
+                files_to_process.append(matching_file)
+
+        if not files_to_process:
+            console.print(f"[yellow]No folders found needing extraction (matching '{self.extraction_keyword}' and missing 'extracted.*').[/yellow]")
+            return
+
+        console.print(f"Found [bold]{len(files_to_process)}[/bold] images to extract faces from.")
+        if not Confirm.ask("Do you want to proceed with batch extraction?"):
+            return
+
+        results_table = Table(title="Batch Extraction Results")
+        results_table.add_column("Folder", style="cyan")
+        results_table.add_column("Source File", style="green")
+        results_table.add_column("Confidence", justify="right", style="magenta")
+        results_table.add_column("Status", style="bold")
+
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            console=console
+        ) as progress:
+            task = progress.add_task("[magenta]Extracting faces...", total=len(files_to_process))
+            
+            for input_path in files_to_process:
+                folder = os.path.basename(os.path.dirname(input_path))
+                filename = os.path.basename(input_path)
+                ext = os.path.splitext(input_path)[1]
+                output_path = os.path.join(os.path.dirname(input_path), f"extracted{ext}")
+                
+                progress.update(task, description=f"[magenta]Extracting: {folder}/{filename}")
+                
+                try:
+                    confidence = self.engine.extract_face(input_path, output_path)
+                    results_table.add_row(folder, filename, f"{confidence:.1%}", "[green]SUCCESS[/green]")
+                except Exception as e:
+                    results_table.add_row(folder, filename, "0.0%", f"[red]FAILED: {e}[/red]")
+                
+                progress.advance(task)
+
+        console.print(results_table)
+        console.print("\n[bold green]Batch extraction complete.[/bold green]")
 
     def _find_image_with_keyword(self, folder_path: str, keyword: str) -> Optional[str]:
         """Finds the first image in the folder whose filename matches the keyword regex."""

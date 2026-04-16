@@ -1,0 +1,11 @@
+# Project Overview
+- Purpose: local offline face similarity application that compares two portrait images using DeepFace, RetinaFace detection, and ArcFace recognition.
+- Primary architecture: `src/engine.py` holds ML/business logic, `src/gui.py` holds the CustomTkinter dark-mode GUI, and `src/cli.py` holds the Rich-based CLI.
+- Entry point: `main.py` routes to GUI by default or CLI when `--cli`, `--img1`, or `--img2` are provided.
+- Main backend type: `FaceEngine` singleton initializes heavy models once, validates images, extracts faces, and maps DeepFace cosine distance to a 0-100 similarity score where >= 80 is treated as a match.
+- GUI type: `ModernGUI` starts model initialization in a background thread and also runs comparisons in a background thread to avoid UI freezes.
+- CLI type: `ProCLI` uses Rich panels/progress/tables and supports interactive single comparison, settings, and batch folder processing.
+- Notable repo layout: root `src/` tree is the active app; `similarity-g3`, `similarity-g3 1`, `similarity-g3 2`, and `similarity-g3 3` appear to be duplicate snapshots/copies and should not be edited casually.
+- Extra utility: `extract_face.py` and `extract_face_launcher.bat` exist alongside the main app.
+- Dependencies from `requirements.txt`: `deepface`, `tf-keras`, `retina-face`, `customtkinter`, `rich`, `opencv-python`, `Pillow`.
+- Important project rules from repo instructions: keep ML logic out of UI files, preserve `retina-face` in dependencies, and any GUI calls into DeepFace model loading/verification must stay in background daemon threads.
