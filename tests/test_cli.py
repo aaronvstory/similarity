@@ -283,6 +283,7 @@ class TestProCLI(unittest.TestCase):
 
         printed_lines = " ".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
         self.assertIn("Workflow Sections", printed_lines)
+        self.assertIn("Tip: Choose 1 or 2 to access specific workflow submenus.", printed_lines)
         self.assertIn("1. Similarity", printed_lines)
         self.assertIn("2. Extraction", printed_lines)
         self.assertIn("3. Settings", printed_lines)
