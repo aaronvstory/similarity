@@ -87,10 +87,22 @@ class _CTkImageStub:
         self.kwargs = kwargs
 
 
+class _CTkTabViewStub(_WidgetStub):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tabs = {}
+
+    def add(self, name: str):
+        tab = _WidgetStub()
+        self.tabs[name] = tab
+        return tab
+
+
 class _CTkModuleStub(types.ModuleType):
     def __init__(self):
         super().__init__("customtkinter")
         self.CTk = _CTkStub
+        self.CTkTabview = _CTkTabViewStub
         self.CTkFrame = _WidgetStub
         self.CTkLabel = _WidgetStub
         self.CTkButton = _WidgetStub
@@ -107,6 +119,9 @@ class _EngineStub:
 
     def compare_images(self, _path1: str, _path2: str):
         return {"match": True, "score": 92.5, "error": None}
+
+    def extract_face(self, _src: str, _out: str, padding: float = 0.175):
+        return 0.81
 
 
 class _ThreadCaptureBase:
@@ -182,7 +197,7 @@ class TestModernGUI(unittest.TestCase):
         self.assertTrue(thread.daemon)
         self.assertTrue(thread.started)
         self.assertEqual(app.btn_run.state, "disabled")
-        self.assertEqual(app.btn_run.kwargs.get("text"), "Run Comparison")
+        self.assertEqual(app.btn_run.kwargs.get("text"), "Run Similarity Comparison")
 
     def test_on_models_ready_re_enables_controls(self) -> None:
         app = self.gui_module.ModernGUI()
@@ -190,8 +205,12 @@ class TestModernGUI(unittest.TestCase):
         self.assertEqual(app.btn_upload1.state, "normal")
         self.assertEqual(app.btn_upload2.state, "normal")
         self.assertEqual(app.btn_run.state, "normal")
-        self.assertEqual(app.result_label.text, "")
-        self.assertTrue(app.progressbar.grid_hidden)
+        self.assertEqual(app.btn_upload_extract.state, "normal")
+        self.assertEqual(app.btn_run_extract.state, "normal")
+        self.assertEqual(app.sim_result_label.text, "")
+        self.assertEqual(app.ext_result_label.text, "")
+        self.assertTrue(app.sim_progressbar.grid_hidden)
+        self.assertTrue(app.ext_progressbar.grid_hidden)
 
     def test_start_comparison_spawns_daemon_worker_and_updates_status(self) -> None:
         app = self.gui_module.ModernGUI()
@@ -207,20 +226,50 @@ class TestModernGUI(unittest.TestCase):
         self.assertEqual(thread.args, ("img1.png", "img2.png"))
         self.assertTrue(thread.daemon)
         self.assertEqual(app.btn_run.state, "disabled")
-        self.assertIn("Processing...", app.result_label.text)
+        self.assertIn("Processing...", app.sim_result_label.text)
 
     def test_on_comparison_complete_renders_expected_success_text(self) -> None:
         app = self.gui_module.ModernGUI()
         app._on_comparison_complete({"match": True, "score": 98.7, "error": None})
-        self.assertIn("Face similarity ratio: 98.7%", app.result_label.text)
-        self.assertIn("are the same person", app.result_label.text)
-        self.assertEqual(app.result_label.text_color, "#00FF00")
+        self.assertIn("Face similarity ratio: 98.7%", app.sim_result_label.text)
+        self.assertIn("are the same person", app.sim_result_label.text)
+        self.assertEqual(app.sim_result_label.text_color, "#00FF00")
 
     def test_on_comparison_complete_renders_error(self) -> None:
         app = self.gui_module.ModernGUI()
         app._on_comparison_complete({"match": False, "score": 0, "error": "bad input"})
-        self.assertEqual(app.result_label.text, "Error: bad input")
-        self.assertEqual(app.result_label.text_color, "red")
+        self.assertEqual(app.sim_result_label.text, "Error: bad input")
+        self.assertEqual(app.sim_result_label.text_color, "red")
+
+    def test_start_extraction_spawns_daemon_worker_and_updates_status(self) -> None:
+        app = self.gui_module.ModernGUI()
+        app.extraction_src_path = "src.png"
+        app.extraction_out_path = "extracted.png"
+        self.thread_instances = []
+
+        with patch("src.gui.os.path.exists", return_value=False):
+            app.start_extraction()
+
+        self.assertEqual(len(self.thread_instances), 1)
+        thread = self.thread_instances[0]
+        self.assertEqual(thread.target.__name__, "_extract_thread")
+        self.assertEqual(thread.args, ("src.png", "extracted.png"))
+        self.assertTrue(thread.daemon)
+        self.assertEqual(app.btn_run_extract.state, "disabled")
+        self.assertIn("Processing...", app.ext_result_label.text)
+
+    def test_on_extraction_complete_renders_success_text(self) -> None:
+        app = self.gui_module.ModernGUI()
+        app._on_extraction_complete({"ok": True, "confidence": 0.91, "output": "C:/tmp/extracted.png"})
+        self.assertIn("Extraction complete: extracted.png", app.ext_result_label.text)
+        self.assertIn("Confidence: 91.0%", app.ext_result_label.text)
+        self.assertEqual(app.ext_result_label.text_color, "#00FF00")
+
+    def test_on_extraction_complete_renders_error(self) -> None:
+        app = self.gui_module.ModernGUI()
+        app._on_extraction_complete({"ok": False, "error": "face missing"})
+        self.assertEqual(app.ext_result_label.text, "Error: face missing")
+        self.assertEqual(app.ext_result_label.text_color, "red")
 
 
 if __name__ == "__main__":

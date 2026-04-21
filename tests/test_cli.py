@@ -208,19 +208,17 @@ class TestProCLI(unittest.TestCase):
 
         self.assertEqual(Path(new_folder).name, "DASHER 88 - Jane Doe (123)_front")
 
-    def test_run_dispatches_each_menu_option_handler(self) -> None:
-        option_to_handler = {
-            "1": "_run_single_comparison",
-            "2": "_run_batch_processing",
-            "3": "_run_single_extraction",
-            "4": "_run_batch_extraction",
-            "5": "_run_settings",
+    def test_run_dispatches_top_level_sections(self) -> None:
+        section_to_handler = {
+            "1": "_run_similarity_menu",
+            "2": "_run_extraction_menu",
+            "3": "_run_settings",
         }
 
-        for option, handler_name in option_to_handler.items():
-            with self.subTest(option=option):
+        for section, handler_name in section_to_handler.items():
+            with self.subTest(section=section):
                 with (
-                    patch("src.cli.Prompt.ask", side_effect=[option, "6"]),
+                    patch("src.cli.Prompt.ask", side_effect=[section, "4"]),
                     patch.object(self.cli, "_display_current_settings"),
                     patch("src.cli.console.print"),
                     patch.object(self.cli, handler_name) as handler,
@@ -228,21 +226,52 @@ class TestProCLI(unittest.TestCase):
                     self.cli.run()
                 handler.assert_called_once_with()
 
+    def test_similarity_menu_dispatches_each_handler(self) -> None:
+        option_to_handler = {
+            "1": "_run_single_comparison",
+            "2": "_run_batch_processing",
+        }
+
+        for option, handler_name in option_to_handler.items():
+            with self.subTest(option=option):
+                with (
+                    patch("src.cli.Prompt.ask", side_effect=[option, "3"]),
+                    patch("src.cli.console.print"),
+                    patch.object(self.cli, handler_name) as handler,
+                ):
+                    self.cli._run_similarity_menu()
+                handler.assert_called_once_with()
+
+    def test_extraction_menu_dispatches_each_handler(self) -> None:
+        option_to_handler = {
+            "1": "_run_single_extraction",
+            "2": "_run_batch_extraction",
+        }
+
+        for option, handler_name in option_to_handler.items():
+            with self.subTest(option=option):
+                with (
+                    patch("src.cli.Prompt.ask", side_effect=[option, "3"]),
+                    patch("src.cli.console.print"),
+                    patch.object(self.cli, handler_name) as handler,
+                ):
+                    self.cli._run_extraction_menu()
+                handler.assert_called_once_with()
+
     def test_run_main_menu_renders_expected_options(self) -> None:
         with (
-            patch("src.cli.Prompt.ask", side_effect=["6"]),
+            patch("src.cli.Prompt.ask", side_effect=["4"]),
             patch.object(self.cli, "_display_current_settings"),
             patch("src.cli.console.print") as mock_print,
         ):
             self.cli.run()
 
         printed_lines = " ".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
-        self.assertIn("1. Single Similarity Comparison", printed_lines)
-        self.assertIn("2. Batch Folder Similarity Check", printed_lines)
-        self.assertIn("3. Single Face Extraction", printed_lines)
-        self.assertIn("4. Batch Face Extraction", printed_lines)
-        self.assertIn("5. Settings", printed_lines)
-        self.assertIn("6. Exit", printed_lines)
+        self.assertIn("Workflow Sections", printed_lines)
+        self.assertIn("1. Similarity", printed_lines)
+        self.assertIn("2. Extraction", printed_lines)
+        self.assertIn("3. Settings", printed_lines)
+        self.assertIn("4. Exit", printed_lines)
 
 
 if __name__ == "__main__":

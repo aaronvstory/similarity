@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+### Added
+- **Separated CLI Workflow Menus**: Interactive CLI now starts with dedicated `Similarity` and `Extraction` sections, each with its own submenu and explicit `Back` navigation.
+- **Separated GUI Workflow Tabs**: GUI now provides dedicated `Similarity` and `Extraction` tabs with independent action controls and status messaging.
+
+### Changed
+- Updated user documentation to reflect sectioned CLI navigation and the tabbed GUI workflow model.
+
 ## [1.1.0] - 2026-04-10
 ### Added
 - **Batch Processing CLI**: A major upgrade to the CLI mode allowing users to select a root directory and recursively scan subfolders.
