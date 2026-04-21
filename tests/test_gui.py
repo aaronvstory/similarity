@@ -241,6 +241,13 @@ class TestModernGUI(unittest.TestCase):
         self.assertEqual(app.sim_result_label.text, "Error: bad input")
         self.assertEqual(app.sim_result_label.text_color, "red")
 
+    def test_compare_thread_converts_engine_exception_to_error_result(self) -> None:
+        app = self.gui_module.ModernGUI()
+        with patch.object(app.engine, "compare_images", side_effect=ValueError("compare failed")):
+            app._compare_thread("img1.png", "img2.png")
+        self.assertEqual(app.sim_result_label.text, "Error: compare failed")
+        self.assertEqual(app.sim_result_label.text_color, "red")
+
     def test_start_extraction_spawns_daemon_worker_and_updates_status(self) -> None:
         app = self.gui_module.ModernGUI()
         app.extraction_src_path = "src.png"
@@ -270,6 +277,14 @@ class TestModernGUI(unittest.TestCase):
         app._on_extraction_complete({"ok": False, "error": "face missing"})
         self.assertEqual(app.ext_result_label.text, "Error: face missing")
         self.assertEqual(app.ext_result_label.text_color, "red")
+
+    def test_on_init_error_hides_both_progress_bars(self) -> None:
+        app = self.gui_module.ModernGUI()
+        app._on_init_error("init failed")
+        self.assertTrue(app.sim_progressbar.grid_hidden)
+        self.assertTrue(app.ext_progressbar.grid_hidden)
+        self.assertIn("Initialization Error", app.sim_result_label.text)
+        self.assertIn("Initialization Error", app.ext_result_label.text)
 
 
 if __name__ == "__main__":

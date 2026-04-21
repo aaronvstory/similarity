@@ -179,6 +179,8 @@ class ModernGUI(ctk.CTk):
     def _on_init_error(self, error_msg: str):
         self.sim_progressbar.stop()
         self.ext_progressbar.stop()
+        self.sim_progressbar.grid_remove()
+        self.ext_progressbar.grid_remove()
         self.sim_result_label.configure(text=f"Initialization Error: {error_msg}", text_color="red")
         self.ext_result_label.configure(text=f"Initialization Error: {error_msg}", text_color="red")
 
@@ -265,7 +267,10 @@ class ModernGUI(ctk.CTk):
         ).start()
 
     def _compare_thread(self, path1: str, path2: str):
-        result = self.engine.compare_images(path1, path2)
+        try:
+            result = self.engine.compare_images(path1, path2)
+        except Exception as e:
+            result = {"match": False, "score": 0.0, "error": str(e)}
         self.after(0, self._on_comparison_complete, result)
 
     def _on_comparison_complete(self, result: dict):
