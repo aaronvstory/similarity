@@ -68,6 +68,7 @@ Explicit compare mode requires both `--img1` and `--img2`. CLI configuration ove
 ## CLI Notes
 - `apply_runtime_config` rejects invalid `existing_file_mode` values instead of silently defaulting. Valid values are `index`, `skip`, and `overwrite`.
 - `padding_ratio` must stay within `0.0` to `1.0`.
+- Invalid runtime configuration exits with code `2`, which keeps CLI usage failures distinct from runtime processing errors.
 - Keyword matching is regex-first with fuzzy fallback, so a configured keyword such as `selfie` can still match files like `selfie expanded.png`.
 
 ## Models Used
