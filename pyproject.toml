@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "similarity-app"
+version = "0.0.0"
+description = "Local face similarity application"
+requires-python = ">=3.8"
+
+[tool.setuptools]
+packages = ["src"]
