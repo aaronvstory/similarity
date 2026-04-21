@@ -1,5 +1,7 @@
 import os
 import threading
+import json
+import logging
 from tkinter import filedialog
 from typing import Optional
 
@@ -20,6 +22,12 @@ class ModernGUI(ctk.CTk):
         super().__init__()
 
         self.engine = FaceEngine()
+        self.config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.json")
+        self.config = {
+            "padding_ratio": 0.175,
+            "existing_file_mode": "index",
+        }
+        self._load_config()
         self.img1_path: Optional[str] = None
         self.img2_path: Optional[str] = None
         self.extraction_src_path: Optional[str] = None
@@ -58,6 +66,27 @@ class ModernGUI(ctk.CTk):
         self.ext_progressbar.start()
 
         threading.Thread(target=self._init_models_thread, daemon=True).start()
+
+    def _load_config(self):
+        if not os.path.exists(self.config_path):
+            return
+        try:
+            with open(self.config_path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if not isinstance(loaded, dict):
+                return
+
+            if "padding_ratio" in loaded:
+                value = float(loaded["padding_ratio"])
+                if 0.0 <= value <= 1.0:
+                    self.config["padding_ratio"] = value
+
+            mode = loaded.get("existing_file_mode")
+            if mode in {"index", "skip", "overwrite"}:
+                self.config["existing_file_mode"] = mode
+        except Exception:
+            # GUI should still launch even with invalid config.json.
+            return
 
     def _build_similarity_tab(self):
         self.similarity_tab.grid_columnconfigure(0, weight=1)
@@ -228,6 +257,27 @@ class ModernGUI(ctk.CTk):
                 return candidate
             idx += 1
 
+    def _resolve_extracted_output_path(self, source_path: str) -> Optional[str]:
+        directory = os.path.dirname(source_path)
+        ext = os.path.splitext(source_path)[1] or ".png"
+        target = os.path.join(directory, f"extracted{ext}")
+
+        mode = self.config.get("existing_file_mode", "index")
+        if mode not in {"index", "skip", "overwrite"}:
+            mode = "index"
+
+        source_norm = os.path.normcase(os.path.normpath(source_path))
+        target_norm = os.path.normcase(os.path.normpath(target))
+        force_index = source_norm == target_norm
+
+        if not os.path.exists(target):
+            return target
+        if mode == "skip" and not force_index:
+            return None
+        if mode == "overwrite" and not force_index:
+            return target
+        return self._next_extracted_path(source_path)
+
     def upload_extraction_image(self):
         file_path = filedialog.askopenfilename(
             title="Select Image for Extraction",
@@ -240,10 +290,15 @@ class ModernGUI(ctk.CTk):
             img = Image.open(file_path)
             ctk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(300, 300))
             self.extraction_src_path = file_path
-            self.extraction_out_path = self._next_extracted_path(file_path)
+            self.extraction_out_path = self._resolve_extracted_output_path(file_path)
             self.ext_display.configure(image=ctk_image, text="")
             self.ext_display.image = ctk_image
-            self.ext_output_label.configure(text=f"Output: {os.path.basename(self.extraction_out_path)}")
+            if self.extraction_out_path:
+                self.ext_output_label.configure(text=f"Output: {os.path.basename(self.extraction_out_path)}")
+            else:
+                self.ext_output_label.configure(
+                    text="Output: skipped by existing_file_mode='skip' (existing extracted file found)"
+                )
         except Exception as e:
             self.ext_result_label.configure(text=f"Error loading image: {e}", text_color="red")
 
@@ -270,6 +325,7 @@ class ModernGUI(ctk.CTk):
         try:
             result = self.engine.compare_images(path1, path2)
         except Exception as e:
+            logging.exception("Comparison thread failed")
             result = {"match": False, "score": 0.0, "error": str(e)}
         self.after(0, self._on_comparison_complete, result)
 
@@ -304,7 +360,13 @@ class ModernGUI(ctk.CTk):
                 text_color="yellow",
             )
             return
-        self.extraction_out_path = self._next_extracted_path(self.extraction_src_path)
+        self.extraction_out_path = self._resolve_extracted_output_path(self.extraction_src_path)
+        if not self.extraction_out_path:
+            self.ext_result_label.configure(
+                text="Extraction skipped because existing_file_mode is 'skip' and an extracted file already exists.",
+                text_color="yellow",
+            )
+            return
         self.ext_output_label.configure(text=f"Output: {os.path.basename(self.extraction_out_path)}")
 
         self.set_ui_state("disabled")
@@ -320,7 +382,7 @@ class ModernGUI(ctk.CTk):
 
     def _extract_thread(self, src_path: str, out_path: str):
         try:
-            confidence = self.engine.extract_face(src_path, out_path, padding=0.175)
+            confidence = self.engine.extract_face(src_path, out_path, padding=self.config["padding_ratio"])
             result = {"ok": True, "confidence": confidence, "output": out_path}
         except Exception as e:
             result = {"ok": False, "error": str(e)}

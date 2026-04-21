@@ -265,6 +265,21 @@ class TestModernGUI(unittest.TestCase):
         self.assertEqual(app.btn_run_extract.state, "disabled")
         self.assertIn("Processing...", app.ext_result_label.text)
 
+    def test_start_extraction_respects_skip_mode_and_existing_target(self) -> None:
+        app = self.gui_module.ModernGUI()
+        app.extraction_src_path = "C:/tmp/front.png"
+        app.config["existing_file_mode"] = "skip"
+        with patch("src.gui.os.path.exists", return_value=True):
+            app.start_extraction()
+        self.assertIn("Extraction skipped", app.ext_result_label.text)
+
+    def test_extract_thread_uses_configured_padding_ratio(self) -> None:
+        app = self.gui_module.ModernGUI()
+        app.config["padding_ratio"] = 0.33
+        with patch.object(app.engine, "extract_face", return_value=0.77) as extract_face:
+            app._extract_thread("src.png", "out.png")
+        extract_face.assert_called_once_with("src.png", "out.png", padding=0.33)
+
     def test_on_extraction_complete_renders_success_text(self) -> None:
         app = self.gui_module.ModernGUI()
         app._on_extraction_complete({"ok": True, "confidence": 0.91, "output": "C:/tmp/extracted.png"})

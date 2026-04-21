@@ -258,6 +258,37 @@ class TestProCLI(unittest.TestCase):
                     self.cli._run_extraction_menu()
                 handler.assert_called_once_with()
 
+    def test_similarity_menu_back_returns_without_running_handlers(self) -> None:
+        with (
+            patch("src.cli.Prompt.ask", return_value="3"),
+            patch("src.cli.console.print"),
+            patch.object(self.cli, "_run_single_comparison") as single,
+            patch.object(self.cli, "_run_batch_processing") as batch,
+        ):
+            self.cli._run_similarity_menu()
+        single.assert_not_called()
+        batch.assert_not_called()
+
+    def test_extraction_menu_back_returns_without_running_handlers(self) -> None:
+        with (
+            patch("src.cli.Prompt.ask", return_value="3"),
+            patch("src.cli.console.print"),
+            patch.object(self.cli, "_run_single_extraction") as single,
+            patch.object(self.cli, "_run_batch_extraction") as batch,
+        ):
+            self.cli._run_extraction_menu()
+        single.assert_not_called()
+        batch.assert_not_called()
+
+    def test_run_exit_prints_exit_message(self) -> None:
+        with (
+            patch("src.cli.Prompt.ask", return_value="4"),
+            patch.object(self.cli, "_display_current_settings"),
+            patch("src.cli.console.print") as mock_print,
+        ):
+            self.cli.run()
+        self.assertTrue(any("[green]Exiting...[/green]" in str(call.args[0]) for call in mock_print.call_args_list if call.args))
+
     def test_run_main_menu_renders_expected_options(self) -> None:
         with (
             patch("src.cli.Prompt.ask", side_effect=["4"]),
