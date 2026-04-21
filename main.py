@@ -97,6 +97,9 @@ def main():
         return
 
     if mode == "compare" or args.img1 or args.img2:
+        if mode == "compare" and (not args.img1 or not args.img2):
+            print("Compare mode requires both --img1 and --img2.")
+            sys.exit(2)
         try:
             cli.run(img1_path=args.img1, img2_path=args.img2)
         except Exception as e:

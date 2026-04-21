@@ -1,7 +1,5 @@
 import os
 import sys
-import tkinter as tk
-from tkinter import filedialog
 from typing import Optional, List, Dict, Any
 from difflib import SequenceMatcher
 import re
@@ -24,6 +22,8 @@ class ProCLI:
     Uses 'rich' for elegant and professional terminal outputs.
     """
     VALID_EXISTING_FILE_MODES = ("index", "skip", "overwrite")
+    MIN_PADDING_RATIO = 0.0
+    MAX_PADDING_RATIO = 1.0
 
     def __init__(self):
         self.engine = FaceEngine()
@@ -63,7 +63,7 @@ class ProCLI:
 
             if "padding_ratio" in saved_config:
                 try:
-                    self.config["padding_ratio"] = float(saved_config["padding_ratio"])
+                    self.config["padding_ratio"] = self._validate_padding_ratio(saved_config["padding_ratio"])
                 except (TypeError, ValueError):
                     console.print("[yellow]Warning: Invalid `padding_ratio` in config.json. Keeping default.[/yellow]")
 
@@ -85,6 +85,29 @@ class ProCLI:
                 json.dump(self.config, f, indent=4)
         except Exception as e:
             console.print(f"[red]Error: Could not save config.json ({e}).[/red]")
+
+    def _validate_padding_ratio(self, value: Any) -> float:
+        padding_ratio = float(value)
+        if not self.MIN_PADDING_RATIO <= padding_ratio <= self.MAX_PADDING_RATIO:
+            raise ValueError(
+                f"`padding_ratio` must be between {self.MIN_PADDING_RATIO} and {self.MAX_PADDING_RATIO}."
+            )
+        return padding_ratio
+
+    def _create_file_dialog_root(self):
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+        except ImportError as exc:
+            raise RuntimeError(
+                "Tk file dialogs are unavailable in this Python environment. "
+                "Pass explicit paths on the CLI or install Python with Tk support."
+            ) from exc
+
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        return root, filedialog
 
     def _display_current_settings(self):
         table = Table(title="Current Active Settings", box=None, show_header=False, padding=(0, 2))
@@ -117,22 +140,22 @@ class ProCLI:
                     sys.exit(1)
 
     def prompt_for_file(self, title: str) -> Optional[str]:
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        file_path = filedialog.askopenfilename(
-            title=title,
-            filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp *.webp")]
-        )
-        root.destroy()
+        root, filedialog = self._create_file_dialog_root()
+        try:
+            file_path = filedialog.askopenfilename(
+                title=title,
+                filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp *.webp")]
+            )
+        finally:
+            root.destroy()
         return file_path if file_path else None
 
     def prompt_for_directory(self, title: str) -> Optional[str]:
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        dir_path = filedialog.askdirectory(title=title)
-        root.destroy()
+        root, filedialog = self._create_file_dialog_root()
+        try:
+            dir_path = filedialog.askdirectory(title=title)
+        finally:
+            root.destroy()
         return dir_path if dir_path else None
 
     def run(self, img1_path: Optional[str] = None, img2_path: Optional[str] = None) -> None:
@@ -179,10 +202,10 @@ class ProCLI:
         while True:
             try:
                 val = Prompt.ask("Enter Extraction Padding Ratio (e.g., 0.175)", default=str(self.config["padding_ratio"]))
-                self.config["padding_ratio"] = float(val)
+                self.config["padding_ratio"] = self._validate_padding_ratio(val)
                 break
-            except ValueError:
-                console.print("[red]Invalid number. Please enter a float.[/red]")
+            except ValueError as e:
+                console.print(f"[red]{e}[/red]")
 
         self.config["existing_file_mode"] = Prompt.ask(
             "Mode for existing extracted files", 
@@ -540,15 +563,14 @@ class ProCLI:
         if extraction_keyword:
             self.config["extraction_keyword"] = extraction_keyword
         if padding_ratio is not None:
-            self.config["padding_ratio"] = float(padding_ratio)
+            self.config["padding_ratio"] = self._validate_padding_ratio(padding_ratio)
         if existing_file_mode:
             if existing_file_mode in self.VALID_EXISTING_FILE_MODES:
                 self.config["existing_file_mode"] = existing_file_mode
             else:
-                console.print(
-                    "[yellow]Warning: Invalid `existing_file_mode` override; defaulting to 'index'.[/yellow]"
+                raise ValueError(
+                    f"`existing_file_mode` must be one of: {', '.join(self.VALID_EXISTING_FILE_MODES)}."
                 )
-                self.config["existing_file_mode"] = "index"
 
     def _display_result(self, result: dict) -> None:
         if result.get("error"):
