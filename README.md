@@ -5,7 +5,7 @@ An enterprise-grade local offline Face Similarity application in Python. This to
 ## Features
 - **Local & Offline Execution**: No biometric data is sent to the cloud. Everything runs locally on your machine.
 - **Dual Interfaces**: 
-  - **Modern GUI**: Built with `customtkinter`, featuring a dark-mode, drag-and-drop/clickable upload interface with multithreaded processing to ensure zero freezing.
+  - **Modern GUI**: Built with `customtkinter`, featuring a dark-mode tabbed workspace that separates similarity and extraction workflows while keeping long-running ML work on background threads.
   - **Pro CLI**: Built with `rich`, featuring an interactive menu for single comparison, automated batch similarity scanning, batch face extraction, and regex-first keyword search with fuzzy fallback.
 - **Batch Face Extraction**: Automatically find and crop faces from source images (e.g., driver's licenses) found in recursive folder structures.
 - **Accurate Mathematics**: Internally converts DeepFace's raw cosine distance into a human-readable 0-100% percentage grade, matching industry-standard strictness (where a score of >= 80% represents a match).
@@ -42,7 +42,14 @@ source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
 python main.py              # Launch GUI
 python main.py --cli        # Launch CLI
+python main.py --mode similarity --root /path/to/root --yes
+python main.py --mode extract --root /path/to/root --yes
+python main.py --mode compare --img1 /path/to/extracted.png --img2 /path/to/selfie.png
 ```
+
+Explicit compare mode requires both `--img1` and `--img2`. CLI configuration overrides such as
+`--img1-keyword`, `--img2-keyword`, `--extraction-keyword`, `--padding-ratio`, and
+`--existing-file-mode` now also force CLI routing even without `--cli`.
 
 ## Batch Processing Usage (CLI)
 1. Run the CLI launcher (`run_cli.bat` or `run_cli.command`).
@@ -57,6 +64,12 @@ python main.py --cli        # Launch CLI
    - Choose **Option 5 (Settings)** first if your images are not named "extracted" and "selfie".
    - Select the root folder. The app will recursively scan every folder. If a folder contains both images, it runs the ArcFace ML models on them.
    - A live progress bar and table will display the results, and the directory will be automatically renamed with a single rounded similarity score token.
+
+## CLI Notes
+- `apply_runtime_config` rejects invalid `existing_file_mode` values instead of silently defaulting. Valid values are `index`, `skip`, and `overwrite`.
+- `padding_ratio` must stay within `0.0` to `1.0`.
+- Invalid runtime configuration exits with code `2`, which keeps CLI usage failures distinct from runtime processing errors.
+- Keyword matching is regex-first with fuzzy fallback, so a configured keyword such as `selfie` can still match files like `selfie expanded.png`.
 
 ## Models Used
 - **Detector**: `retinaface` (Robust face detection and 5-point alignment)

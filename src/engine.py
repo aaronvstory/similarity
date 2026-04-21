@@ -1,7 +1,9 @@
 import os
 import threading
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Dict, Union, Any, Optional
 import urllib.request
+import math
 
 import cv2
 import numpy as np
@@ -48,6 +50,7 @@ class FaceEngine:
         self.caffemodel_url = "https://raw.githubusercontent.com/opencv/opencv_3rdparty/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel"
         
         self.extraction_net = None
+        self._executor: Optional[ThreadPoolExecutor] = None
         self._initialized = True
 
     def initialize_models(self) -> None:
@@ -60,6 +63,21 @@ class FaceEngine:
             DeepFace.build_model(model_name=self.model_name)
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Face Models: {e}")
+
+    def initialize_async(self) -> Future:
+        """Warm the heavy ArcFace model on a background worker."""
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="face-engine")
+        return self._executor.submit(self.initialize_models)
+
+    def shutdown(self) -> None:
+        """Release any executor resources created for async warmup."""
+        if self._executor is not None:
+            try:
+                self._executor.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                self._executor.shutdown(wait=False)
+            self._executor = None
 
     def _ensure_extraction_models(self) -> None:
         """Downloads the OpenCV DNN face detection models if missing."""
@@ -159,6 +177,30 @@ class FaceEngine:
             raise ValueError(f"No face detected in {image_label}.")
         return max(faces, key=self._face_area)
 
+    def _represent_face(self, face_crop: Any) -> np.ndarray:
+        representations = DeepFace.represent(
+            img_path=face_crop,
+            model_name=self.model_name,
+            detector_backend="skip",
+            enforce_detection=False,
+            align=False,
+        )
+        if not representations:
+            raise ValueError("Could not generate a face embedding.")
+        embedding = representations[0].get("embedding")
+        if not embedding:
+            raise ValueError("DeepFace did not return an embedding.")
+        return np.asarray(embedding, dtype=float)
+
+    def _cosine_distance(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
+        norm1 = float(np.linalg.norm(embedding1))
+        norm2 = float(np.linalg.norm(embedding2))
+        if math.isclose(norm1, 0.0) or math.isclose(norm2, 0.0):
+            raise ValueError("Received a zero-length face embedding.")
+        similarity = float(np.dot(embedding1, embedding2) / (norm1 * norm2))
+        similarity = max(-1.0, min(1.0, similarity))
+        return 1.0 - similarity
+
     def compare_images(self, img1_path: str, img2_path: str) -> Dict[str, Union[bool, float, str]]:
         """
         Compares two images using the configured ML models.
@@ -181,34 +223,22 @@ class FaceEngine:
                 img_path=img1_path, 
                 detector_backend=self.detector_backend, 
                 enforce_detection=True,
-                normalize_face=False,
-                color_face="bgr",
             )
             faces2 = DeepFace.extract_faces(
                 img_path=img2_path, 
                 detector_backend=self.detector_backend, 
                 enforce_detection=True,
-                normalize_face=False,
-                color_face="bgr",
             )
 
             face1 = self._select_prominent_face(faces1, "image 1")
             face2 = self._select_prominent_face(faces2, "image 2")
 
-            # 3. Perform Verification
-            result = DeepFace.verify(
-                img1_path=face1["face"],
-                img2_path=face2["face"],
-                model_name=self.model_name,
-                detector_backend="skip",
-                distance_metric=self.distance_metric,
-                enforce_detection=False,
-                align=True
-            )
-
-            # 4. Calculate Percentage using Threshold Mapping
-            distance = float(result.get("distance", 1.0))
-            threshold = float(result.get("threshold", 0.68))
+            # 3. Compare the selected face crops using embeddings. DeepFace.verify on the
+            # extracted in-memory face arrays can collapse to near-zero distances.
+            embedding1 = self._represent_face(face1["face"])
+            embedding2 = self._represent_face(face2["face"])
+            distance = self._cosine_distance(embedding1, embedding2)
+            threshold = 0.68
             
             # Bound distance to [0, 1] just in case
             distance = max(0.0, min(1.0, distance))
@@ -245,4 +275,3 @@ class FaceEngine:
             if "exhausted" in error_msg or "oom" in error_msg or "memory" in error_msg:
                  return {"match": False, "score": 0.0, "error": "Memory resource exhausted. Please free up RAM."}
             return {"match": False, "score": 0.0, "error": f"An unexpected ML error occurred: {e}"}
-

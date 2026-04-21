@@ -1,7 +1,5 @@
 import os
 import sys
-import tkinter as tk
-from tkinter import filedialog
 from typing import Optional, List, Dict, Any
 from difflib import SequenceMatcher
 import re
@@ -24,6 +22,8 @@ class ProCLI:
     Uses 'rich' for elegant and professional terminal outputs.
     """
     VALID_EXISTING_FILE_MODES = ("index", "skip", "overwrite")
+    MIN_PADDING_RATIO = 0.0
+    MAX_PADDING_RATIO = 1.0
 
     def __init__(self):
         self.engine = FaceEngine()
@@ -63,7 +63,7 @@ class ProCLI:
 
             if "padding_ratio" in saved_config:
                 try:
-                    self.config["padding_ratio"] = float(saved_config["padding_ratio"])
+                    self.config["padding_ratio"] = self._validate_padding_ratio(saved_config["padding_ratio"])
                 except (TypeError, ValueError):
                     console.print("[yellow]Warning: Invalid `padding_ratio` in config.json. Keeping default.[/yellow]")
 
@@ -81,10 +81,37 @@ class ProCLI:
 
     def save_config(self):
         try:
-            with open(self.config_path, "w") as f:
+            with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=4)
         except Exception as e:
             console.print(f"[red]Error: Could not save config.json ({e}).[/red]")
+
+    def _validate_padding_ratio(self, value: Any) -> float:
+        padding_ratio = float(value)
+        if not self.MIN_PADDING_RATIO <= padding_ratio <= self.MAX_PADDING_RATIO:
+            raise ValueError(
+                f"`padding_ratio` must be between {self.MIN_PADDING_RATIO} and {self.MAX_PADDING_RATIO}."
+            )
+        return padding_ratio
+
+    def _create_file_dialog_root(self):
+        error_message = (
+            "Tk file dialogs are unavailable in this Python environment. "
+            "Pass explicit paths on the CLI or install Python with Tk support."
+        )
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+        except ImportError as exc:
+            raise RuntimeError(error_message) from exc
+
+        try:
+            root = tk.Tk()
+        except tk.TclError as exc:
+            raise RuntimeError(error_message) from exc
+        root.withdraw()
+        root.attributes('-topmost', True)
+        return root, filedialog
 
     def _display_current_settings(self):
         table = Table(title="Current Active Settings", box=None, show_header=False, padding=(0, 2))
@@ -117,22 +144,22 @@ class ProCLI:
                     sys.exit(1)
 
     def prompt_for_file(self, title: str) -> Optional[str]:
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        file_path = filedialog.askopenfilename(
-            title=title,
-            filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp *.webp")]
-        )
-        root.destroy()
+        root, filedialog = self._create_file_dialog_root()
+        try:
+            file_path = filedialog.askopenfilename(
+                title=title,
+                filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp *.webp")]
+            )
+        finally:
+            root.destroy()
         return file_path if file_path else None
 
     def prompt_for_directory(self, title: str) -> Optional[str]:
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes('-topmost', True)
-        dir_path = filedialog.askdirectory(title=title)
-        root.destroy()
+        root, filedialog = self._create_file_dialog_root()
+        try:
+            dir_path = filedialog.askdirectory(title=title)
+        finally:
+            root.destroy()
         return dir_path if dir_path else None
 
     def run(self, img1_path: Optional[str] = None, img2_path: Optional[str] = None) -> None:
@@ -179,10 +206,10 @@ class ProCLI:
         while True:
             try:
                 val = Prompt.ask("Enter Extraction Padding Ratio (e.g., 0.175)", default=str(self.config["padding_ratio"]))
-                self.config["padding_ratio"] = float(val)
+                self.config["padding_ratio"] = self._validate_padding_ratio(val)
                 break
-            except ValueError:
-                console.print("[red]Invalid number. Please enter a float.[/red]")
+            except ValueError as e:
+                console.print(f"[red]{e}[/red]")
 
         self.config["existing_file_mode"] = Prompt.ask(
             "Mode for existing extracted files", 
@@ -327,8 +354,12 @@ class ProCLI:
             console.print(f"[red]Failed to write manifest: {e}[/red]")
 
     def _run_batch_extraction(self):
+        self.run_batch_extraction()
+
+    def run_batch_extraction(self, root_dir: Optional[str] = None, confirm: bool = True) -> None:
         console.print("[yellow]Please select the root directory for batch extraction...[/yellow]")
-        root_dir = self.prompt_for_directory("Select Root Directory")
+        if not root_dir:
+            root_dir = self.prompt_for_directory("Select Root Directory")
         if not root_dir:
             console.print("[yellow]Action cancelled. No root directory selected.[/yellow]")
             return
@@ -348,7 +379,7 @@ class ProCLI:
             return
 
         console.print(f"Found [bold]{len(folders_to_process)}[/bold] images to process.")
-        if not Confirm.ask("Proceed?"):
+        if confirm and not Confirm.ask("Proceed?"):
             return
 
         self._ensure_models_initialized()
@@ -452,8 +483,12 @@ class ProCLI:
         return os.path.join(parent_dir, new_name)
 
     def _run_batch_processing(self):
+        self.run_batch_similarity()
+
+    def run_batch_similarity(self, root_dir: Optional[str] = None, confirm: bool = True) -> None:
         console.print("[yellow]Please select root for similarity check...[/yellow]")
-        root_dir = self.prompt_for_directory("Select Root Directory")
+        if not root_dir:
+            root_dir = self.prompt_for_directory("Select Root Directory")
         if not root_dir:
             console.print("[yellow]Action cancelled. No root directory selected.[/yellow]")
             return
@@ -476,7 +511,7 @@ class ProCLI:
             return
 
         console.print(f"Found [bold]{len(folders_to_process)}[/bold] folders. Proceed?")
-        if not Confirm.ask("Proceed?"):
+        if confirm and not Confirm.ask("Proceed?"):
             return
 
         self._ensure_models_initialized()
@@ -515,6 +550,31 @@ class ProCLI:
         console.print(results_table)
         self._log_to_manifest(root_dir, "batch_similarity", op_results)
         console.print(f"\n[bold green]Complete. Manifest saved to {root_dir}/manifest.json[/bold green]")
+
+    def apply_runtime_config(
+        self,
+        *,
+        img1_keyword: Optional[str] = None,
+        img2_keyword: Optional[str] = None,
+        extraction_keyword: Optional[str] = None,
+        padding_ratio: Optional[float] = None,
+        existing_file_mode: Optional[str] = None,
+    ) -> None:
+        if img1_keyword:
+            self.config["img1_keyword"] = img1_keyword
+        if img2_keyword:
+            self.config["img2_keyword"] = img2_keyword
+        if extraction_keyword:
+            self.config["extraction_keyword"] = extraction_keyword
+        if padding_ratio is not None:
+            self.config["padding_ratio"] = self._validate_padding_ratio(padding_ratio)
+        if existing_file_mode:
+            if existing_file_mode in self.VALID_EXISTING_FILE_MODES:
+                self.config["existing_file_mode"] = existing_file_mode
+            else:
+                raise ValueError(
+                    f"`existing_file_mode` must be one of: {', '.join(self.VALID_EXISTING_FILE_MODES)}."
+                )
 
     def _display_result(self, result: dict) -> None:
         if result.get("error"):
