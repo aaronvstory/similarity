@@ -7,11 +7,21 @@ from typing import Optional
 
 import customtkinter as ctk
 from PIL import Image
+from tkinterdnd2 import DND_FILES, TkinterDnD
 
 from src.engine import FaceEngine
 
+IMAGE_FILETYPES = [("Image Files", "*.png *.jpg *.jpeg *.bmp *.webp")]
+SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
 
-class ModernGUI(ctk.CTk):
+
+class DnDCTk(TkinterDnD.DnDWrapper, ctk.CTk):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.TkdndVersion = TkinterDnD._require(self)
+
+
+class ModernGUI(DnDCTk):
     """
     Modern Graphical User Interface using CustomTkinter.
     Provides separate Similarity and Extraction workflows while running
@@ -100,8 +110,16 @@ class ModernGUI(ctk.CTk):
 
         self.zone1_label = ctk.CTkLabel(self.zone1_frame, text="Upload Image 1", font=ctk.CTkFont(size=16))
         self.zone1_label.grid(row=0, column=0, pady=10)
-        self.img1_display = ctk.CTkLabel(self.zone1_frame, text="No Image Selected")
-        self.img1_display.grid(row=1, column=0, pady=10)
+        self.zone1_dropzone = ctk.CTkFrame(
+            self.zone1_frame, fg_color="transparent", border_width=2, border_color="#1f6aa5"
+        )
+        self.zone1_dropzone.grid(row=1, column=0, pady=10, padx=8, sticky="nsew")
+        self.zone1_dropzone.grid_rowconfigure(1, weight=1)
+        self.zone1_dropzone.grid_columnconfigure(0, weight=1)
+        self.zone1_drop_hint = ctk.CTkLabel(self.zone1_dropzone, text="Drag and drop image here")
+        self.zone1_drop_hint.grid(row=0, column=0, pady=(10, 6), padx=12)
+        self.img1_display = ctk.CTkLabel(self.zone1_dropzone, text="No Image Selected")
+        self.img1_display.grid(row=1, column=0, pady=(4, 10), padx=12)
         self.btn_upload1 = ctk.CTkButton(self.zone1_frame, text="Select File...", command=lambda: self.upload_image(1))
         self.btn_upload1.grid(row=2, column=0, pady=20)
 
@@ -112,10 +130,25 @@ class ModernGUI(ctk.CTk):
 
         self.zone2_label = ctk.CTkLabel(self.zone2_frame, text="Upload Image 2", font=ctk.CTkFont(size=16))
         self.zone2_label.grid(row=0, column=0, pady=10)
-        self.img2_display = ctk.CTkLabel(self.zone2_frame, text="No Image Selected")
-        self.img2_display.grid(row=1, column=0, pady=10)
+        self.zone2_dropzone = ctk.CTkFrame(
+            self.zone2_frame, fg_color="transparent", border_width=2, border_color="#1f6aa5"
+        )
+        self.zone2_dropzone.grid(row=1, column=0, pady=10, padx=8, sticky="nsew")
+        self.zone2_dropzone.grid_rowconfigure(1, weight=1)
+        self.zone2_dropzone.grid_columnconfigure(0, weight=1)
+        self.zone2_drop_hint = ctk.CTkLabel(self.zone2_dropzone, text="Drag and drop image here")
+        self.zone2_drop_hint.grid(row=0, column=0, pady=(10, 6), padx=12)
+        self.img2_display = ctk.CTkLabel(self.zone2_dropzone, text="No Image Selected")
+        self.img2_display.grid(row=1, column=0, pady=(4, 10), padx=12)
         self.btn_upload2 = ctk.CTkButton(self.zone2_frame, text="Select File...", command=lambda: self.upload_image(2))
         self.btn_upload2.grid(row=2, column=0, pady=20)
+
+        self._bind_drop_target(self.zone1_dropzone, self._on_drop_similarity_image1)
+        self._bind_drop_target(self.zone1_drop_hint, self._on_drop_similarity_image1)
+        self._bind_drop_target(self.img1_display, self._on_drop_similarity_image1)
+        self._bind_drop_target(self.zone2_dropzone, self._on_drop_similarity_image2)
+        self._bind_drop_target(self.zone2_drop_hint, self._on_drop_similarity_image2)
+        self._bind_drop_target(self.img2_display, self._on_drop_similarity_image2)
 
         self.sim_controls = ctk.CTkFrame(self.similarity_tab, fg_color="transparent")
         self.sim_controls.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(6, 16))
@@ -154,8 +187,14 @@ class ModernGUI(ctk.CTk):
         self.ext_label = ctk.CTkLabel(self.ext_frame, text="Select Source Image", font=ctk.CTkFont(size=16))
         self.ext_label.grid(row=0, column=0, pady=(12, 8))
 
-        self.ext_display = ctk.CTkLabel(self.ext_frame, text="No Source Image Selected")
-        self.ext_display.grid(row=1, column=0, pady=(2, 10))
+        self.ext_dropzone = ctk.CTkFrame(self.ext_frame, fg_color="transparent", border_width=2, border_color="#1f6aa5")
+        self.ext_dropzone.grid(row=1, column=0, pady=(2, 10), padx=8, sticky="nsew")
+        self.ext_dropzone.grid_rowconfigure(1, weight=1)
+        self.ext_dropzone.grid_columnconfigure(0, weight=1)
+        self.ext_drop_hint = ctk.CTkLabel(self.ext_dropzone, text="Drag and drop source image here")
+        self.ext_drop_hint.grid(row=0, column=0, pady=(10, 6), padx=12)
+        self.ext_display = ctk.CTkLabel(self.ext_dropzone, text="No Source Image Selected")
+        self.ext_display.grid(row=1, column=0, pady=(4, 10), padx=12)
 
         self.btn_upload_extract = ctk.CTkButton(
             self.ext_frame,
@@ -163,6 +202,10 @@ class ModernGUI(ctk.CTk):
             command=self.upload_extraction_image,
         )
         self.btn_upload_extract.grid(row=2, column=0, pady=8)
+
+        self._bind_drop_target(self.ext_dropzone, self._on_drop_extraction_source)
+        self._bind_drop_target(self.ext_drop_hint, self._on_drop_extraction_source)
+        self._bind_drop_target(self.ext_display, self._on_drop_extraction_source)
 
         self.ext_output_label = ctk.CTkLabel(self.ext_frame, text="Output: (not selected yet)", wraplength=760)
         self.ext_output_label.grid(row=3, column=0, pady=(4, 10))
@@ -220,12 +263,41 @@ class ModernGUI(ctk.CTk):
         self.btn_upload_extract.configure(state=state)
         self.btn_run_extract.configure(state=state)
 
-    def upload_image(self, zone: int):
-        file_path = filedialog.askopenfilename(
-            title=f"Select Image {zone}",
-            filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp *.webp")],
-        )
-        if not file_path:
+    def _bind_drop_target(self, widget, handler):
+        widget.drop_target_register(DND_FILES)
+        widget.dnd_bind("<<Drop>>", handler)
+
+    def _extract_drop_paths(self, data: str) -> list[str]:
+        if not data:
+            return []
+
+        try:
+            raw_paths = self.tk.splitlist(data)
+        except Exception:
+            raw_paths = (data,)
+
+        paths: list[str] = []
+        for raw_path in raw_paths:
+            path = str(raw_path).strip()
+            if path.startswith("{") and path.endswith("}"):
+                path = path[1:-1]
+            path = path.strip().strip('"')
+            if path:
+                paths.append(os.path.normpath(path))
+        return paths
+
+    def _is_supported_image_file(self, file_path: str) -> bool:
+        return os.path.splitext(file_path)[1].lower() in SUPPORTED_IMAGE_EXTENSIONS
+
+    def _load_similarity_image(self, file_path: str, zone: int):
+        if not os.path.isfile(file_path):
+            self.sim_result_label.configure(text=f"Error loading image: file not found ({file_path})", text_color="red")
+            return
+        if not self._is_supported_image_file(file_path):
+            self.sim_result_label.configure(
+                text="Error loading image: unsupported file type. Use PNG, JPG, JPEG, BMP, or WEBP.",
+                text_color="red",
+            )
             return
 
         try:
@@ -243,6 +315,68 @@ class ModernGUI(ctk.CTk):
                 self.img2_display.image = ctk_image
         except Exception as e:
             self.sim_result_label.configure(text=f"Error loading image: {e}", text_color="red")
+
+    def _load_extraction_source_image(self, file_path: str):
+        if not os.path.isfile(file_path):
+            self.ext_result_label.configure(text=f"Error loading image: file not found ({file_path})", text_color="red")
+            return
+        if not self._is_supported_image_file(file_path):
+            self.ext_result_label.configure(
+                text="Error loading image: unsupported file type. Use PNG, JPG, JPEG, BMP, or WEBP.",
+                text_color="red",
+            )
+            return
+
+        try:
+            with Image.open(file_path) as opened:
+                img = opened.copy()
+            ctk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(300, 300))
+            self.extraction_src_path = file_path
+            self.extraction_out_path = self._resolve_extracted_output_path(file_path)
+            self.ext_display.configure(image=ctk_image, text="")
+            self.ext_display.image = ctk_image
+            if self.extraction_out_path:
+                self.ext_output_label.configure(text=f"Output: {os.path.basename(self.extraction_out_path)}")
+            else:
+                self.ext_output_label.configure(
+                    text="Output: skipped by existing_file_mode='skip' (existing extracted file found)"
+                )
+        except Exception as e:
+            self.ext_result_label.configure(text=f"Error loading image: {e}", text_color="red")
+
+    def _handle_similarity_drop(self, data: str, zone: int):
+        for file_path in self._extract_drop_paths(data):
+            self._load_similarity_image(file_path, zone)
+            return
+        self.sim_result_label.configure(text="Error loading image: no files were dropped.", text_color="red")
+
+    def _handle_extraction_drop(self, data: str):
+        for file_path in self._extract_drop_paths(data):
+            self._load_extraction_source_image(file_path)
+            return
+        self.ext_result_label.configure(text="Error loading image: no files were dropped.", text_color="red")
+
+    def _on_drop_similarity_image1(self, event):
+        self._handle_similarity_drop(event.data, 1)
+        return "break"
+
+    def _on_drop_similarity_image2(self, event):
+        self._handle_similarity_drop(event.data, 2)
+        return "break"
+
+    def _on_drop_extraction_source(self, event):
+        self._handle_extraction_drop(event.data)
+        return "break"
+
+    def upload_image(self, zone: int):
+        file_path = filedialog.askopenfilename(
+            title=f"Select Image {zone}",
+            filetypes=IMAGE_FILETYPES,
+        )
+        if not file_path:
+            return
+
+        self._load_similarity_image(file_path, zone)
 
     def _next_extracted_path(self, source_path: str) -> str:
         directory = os.path.dirname(source_path)
@@ -285,27 +419,12 @@ class ModernGUI(ctk.CTk):
     def upload_extraction_image(self):
         file_path = filedialog.askopenfilename(
             title="Select Image for Extraction",
-            filetypes=[("Image Files", "*.png *.jpg *.jpeg *.bmp *.webp")],
+            filetypes=IMAGE_FILETYPES,
         )
         if not file_path:
             return
 
-        try:
-            with Image.open(file_path) as opened:
-                img = opened.copy()
-            ctk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(300, 300))
-            self.extraction_src_path = file_path
-            self.extraction_out_path = self._resolve_extracted_output_path(file_path)
-            self.ext_display.configure(image=ctk_image, text="")
-            self.ext_display.image = ctk_image
-            if self.extraction_out_path:
-                self.ext_output_label.configure(text=f"Output: {os.path.basename(self.extraction_out_path)}")
-            else:
-                self.ext_output_label.configure(
-                    text="Output: skipped by existing_file_mode='skip' (existing extracted file found)"
-                )
-        except Exception as e:
-            self.ext_result_label.configure(text=f"Error loading image: {e}", text_color="red")
+        self._load_extraction_source_image(file_path)
 
     def start_comparison(self):
         if not self.img1_path or not self.img2_path:
