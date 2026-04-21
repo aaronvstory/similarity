@@ -94,6 +94,24 @@ class TestMainRouting(unittest.TestCase):
         fake_cli.return_value.run.assert_called_once_with()
         gui_module.run_gui.assert_not_called()
 
+    def test_existing_file_mode_only_launches_cli_instead_of_gui(self) -> None:
+        deepface_module = types.ModuleType("deepface")
+        deepface_module.DeepFace = _DeepFaceStub
+        gui_module = types.ModuleType("src.gui")
+        gui_module.run_gui = MagicMock()
+
+        with patch.dict(sys.modules, {"deepface": deepface_module, "src.gui": gui_module}):
+            fake_cli = patch("src.cli.ProCLI").start()
+            self.addCleanup(patch.stopall)
+
+            with patch.object(sys, "argv", ["main.py", "--existing-file-mode", "skip"]):
+                main.main()
+
+        fake_cli.assert_called_once()
+        fake_cli.return_value.apply_runtime_config.assert_called_once()
+        fake_cli.return_value.run.assert_called_once_with()
+        gui_module.run_gui.assert_not_called()
+
     def test_no_cli_args_launches_gui(self) -> None:
         gui_module = types.ModuleType("src.gui")
         gui_module.run_gui = MagicMock()
@@ -127,6 +145,26 @@ class TestMainRouting(unittest.TestCase):
         self.assertEqual(cm.exception.code, 2)
         self.assertIn("requires both --img1 and --img2", stdout.getvalue())
         fake_cli.return_value.run.assert_not_called()
+
+    def test_invalid_runtime_config_exits_with_usage_error(self) -> None:
+        stderr = io.StringIO()
+        deepface_module = types.ModuleType("deepface")
+        deepface_module.DeepFace = _DeepFaceStub
+
+        with patch.dict(sys.modules, {"deepface": deepface_module}):
+            fake_cli = patch("src.cli.ProCLI").start()
+            self.addCleanup(patch.stopall)
+            fake_cli.return_value.apply_runtime_config.side_effect = ValueError("bad padding")
+
+            with (
+                patch.object(sys, "argv", ["main.py", "--padding-ratio", "2"]),
+                patch("sys.stderr", stderr),
+            ):
+                with self.assertRaises(SystemExit) as cm:
+                    main.main()
+
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("Error: bad padding", stderr.getvalue())
 
 
 if __name__ == "__main__":

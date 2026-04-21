@@ -73,13 +73,17 @@ def main():
         sys.exit(1)
 
     cli = ProCLI()
-    cli.apply_runtime_config(
-        img1_keyword=args.img1_keyword,
-        img2_keyword=args.img2_keyword,
-        extraction_keyword=args.extraction_keyword,
-        padding_ratio=args.padding_ratio,
-        existing_file_mode=args.existing_file_mode,
-    )
+    try:
+        cli.apply_runtime_config(
+            img1_keyword=args.img1_keyword,
+            img2_keyword=args.img2_keyword,
+            extraction_keyword=args.extraction_keyword,
+            padding_ratio=args.padding_ratio,
+            existing_file_mode=args.existing_file_mode,
+        )
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
 
     mode = args.mode
     if mode == "gui":

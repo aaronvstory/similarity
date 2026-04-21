@@ -43,10 +43,10 @@ class TestProCLI(unittest.TestCase):
     def test_import_does_not_require_tkinter(self) -> None:
         original_import = builtins.__import__
 
-        def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        def guarded_import(name, global_vars=None, local_vars=None, fromlist=(), level=0):
             if name == "tkinter":
                 raise AssertionError("tkinter should not be imported at module import time")
-            return original_import(name, globals, locals, fromlist, level)
+            return original_import(name, global_vars, local_vars, fromlist, level)
 
         with patch("builtins.__import__", side_effect=guarded_import):
             reloaded = importlib.reload(cli_module)
@@ -93,10 +93,34 @@ class TestProCLI(unittest.TestCase):
     def test_create_file_dialog_root_raises_runtime_error_without_tk(self) -> None:
         original_import = builtins.__import__
 
-        def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        def guarded_import(name, global_vars=None, local_vars=None, fromlist=(), level=0):
             if name == "tkinter":
                 raise ImportError("tk missing")
-            return original_import(name, globals, locals, fromlist, level)
+            return original_import(name, global_vars, local_vars, fromlist, level)
+
+        with patch("builtins.__import__", side_effect=guarded_import):
+            with self.assertRaisesRegex(RuntimeError, "Tk file dialogs are unavailable"):
+                self.cli._create_file_dialog_root()
+
+    def test_create_file_dialog_root_raises_runtime_error_without_display(self) -> None:
+        fake_tkinter = types.ModuleType("tkinter")
+
+        class FakeTclError(Exception):
+            pass
+
+        def raise_tcl_error():
+            raise FakeTclError("no display")
+
+        fake_tkinter.TclError = FakeTclError
+        fake_tkinter.Tk = raise_tcl_error
+        fake_tkinter.filedialog = types.SimpleNamespace()
+
+        original_import = builtins.__import__
+
+        def guarded_import(name, global_vars=None, local_vars=None, fromlist=(), level=0):
+            if name == "tkinter":
+                return fake_tkinter
+            return original_import(name, global_vars, local_vars, fromlist, level)
 
         with patch("builtins.__import__", side_effect=guarded_import):
             with self.assertRaisesRegex(RuntimeError, "Tk file dialogs are unavailable"):

@@ -95,16 +95,20 @@ class ProCLI:
         return padding_ratio
 
     def _create_file_dialog_root(self):
+        error_message = (
+            "Tk file dialogs are unavailable in this Python environment. "
+            "Pass explicit paths on the CLI or install Python with Tk support."
+        )
         try:
             import tkinter as tk
             from tkinter import filedialog
         except ImportError as exc:
-            raise RuntimeError(
-                "Tk file dialogs are unavailable in this Python environment. "
-                "Pass explicit paths on the CLI or install Python with Tk support."
-            ) from exc
+            raise RuntimeError(error_message) from exc
 
-        root = tk.Tk()
+        try:
+            root = tk.Tk()
+        except tk.TclError as exc:
+            raise RuntimeError(error_message) from exc
         root.withdraw()
         root.attributes('-topmost', True)
         return root, filedialog

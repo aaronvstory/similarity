@@ -4,12 +4,13 @@ import importlib
 import sys
 import types
 import unittest
+from typing import Any, ClassVar
 from unittest.mock import patch
 
 
 class _DeepFaceRecorder:
-    extract_calls = []
-    represent_calls = []
+    extract_calls: ClassVar[list[dict[str, Any]]] = []
+    represent_calls: ClassVar[list[dict[str, Any]]] = []
 
     @classmethod
     def reset(cls) -> None:
@@ -44,18 +45,29 @@ class _DeepFaceRecorder:
         }
         return [{"embedding": embeddings[kwargs["img_path"]]}]
 
-
-deepface_module = types.ModuleType("deepface")
-deepface_module.DeepFace = _DeepFaceRecorder
-sys.modules["deepface"] = deepface_module
+def _build_deepface_module() -> types.ModuleType:
+    deepface_module = types.ModuleType("deepface")
+    deepface_module.DeepFace = _DeepFaceRecorder
+    return deepface_module
 
 
 class TestFaceEngine(unittest.TestCase):
     def setUp(self) -> None:
+        self._original_engine_module = sys.modules.pop("src.engine", None)
+        self.addCleanup(self._restore_engine_module)
+
+        deepface_patcher = patch.dict(sys.modules, {"deepface": _build_deepface_module()})
+        deepface_patcher.start()
+        self.addCleanup(deepface_patcher.stop)
+
         self.engine_module = importlib.import_module("src.engine")
-        self.engine_module = importlib.reload(self.engine_module)
         self.engine_module.FaceEngine._instance = None
         _DeepFaceRecorder.reset()
+
+    def _restore_engine_module(self) -> None:
+        sys.modules.pop("src.engine", None)
+        if self._original_engine_module is not None:
+            sys.modules["src.engine"] = self._original_engine_module
 
     def test_compare_images_uses_largest_face_and_embeddings(self) -> None:
         engine = self.engine_module.FaceEngine()
@@ -65,20 +77,23 @@ class TestFaceEngine(unittest.TestCase):
 
         self.assertIsNone(result["error"])
         self.assertTrue(result["match"])
-        self.assertLess(result["score"], 100.0)
+        self.assertAlmostEqual(result["score"], 94.12, places=2)
         self.assertEqual(len(_DeepFaceRecorder.extract_calls), 2)
         self.assertEqual(len(_DeepFaceRecorder.represent_calls), 2)
         self.assertEqual(_DeepFaceRecorder.represent_calls[0]["img_path"], "large-a")
         self.assertEqual(_DeepFaceRecorder.represent_calls[1]["img_path"], "large-b")
-        self.assertEqual(_DeepFaceRecorder.represent_calls[0]["detector_backend"], "skip")
+        self.assertTrue(
+            all(call["detector_backend"] == "skip" for call in _DeepFaceRecorder.represent_calls)
+        )
 
     def test_identical_embeddings_map_to_full_score(self) -> None:
         engine = self.engine_module.FaceEngine()
-        embedding = self.engine_module.np.asarray([1.0, 0.0, 0.0], dtype=float)
+        with patch.object(engine, "validate_image_file"):
+            result = engine.compare_images("image-a.jpg", "image-a.jpg")
 
-        distance = engine._cosine_distance(embedding, embedding)
-
-        self.assertEqual(distance, 0.0)
+        self.assertIsNone(result["error"])
+        self.assertTrue(result["match"])
+        self.assertEqual(result["score"], 100.0)
 
     def test_shutdown_falls_back_when_cancel_futures_is_unsupported(self) -> None:
         engine = self.engine_module.FaceEngine()
