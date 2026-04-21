@@ -3,7 +3,7 @@ import threading
 import json
 import logging
 from tkinter import filedialog
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import customtkinter as ctk
 from PIL import Image
@@ -13,6 +13,8 @@ from src.engine import FaceEngine
 
 IMAGE_FILETYPES = [("Image Files", "*.png *.jpg *.jpeg *.bmp *.webp")]
 SUPPORTED_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".webp"}
+SIMILARITY_PREVIEW_MAX_SIZE = (250, 250)
+EXTRACTION_PREVIEW_MAX_SIZE = (300, 300)
 
 
 class DnDCTk(TkinterDnD.DnDWrapper, ctk.CTk):
@@ -267,7 +269,7 @@ class ModernGUI(DnDCTk):
         widget.drop_target_register(DND_FILES)
         widget.dnd_bind("<<Drop>>", handler)
 
-    def _extract_drop_paths(self, data: str) -> list[str]:
+    def _extract_drop_paths(self, data: str) -> List[str]:
         if not data:
             return []
 
@@ -276,7 +278,7 @@ class ModernGUI(DnDCTk):
         except Exception:
             raw_paths = (data,)
 
-        paths: list[str] = []
+        paths: List[str] = []
         for raw_path in raw_paths:
             path = str(raw_path).strip()
             if path.startswith("{") and path.endswith("}"):
@@ -286,8 +288,27 @@ class ModernGUI(DnDCTk):
                 paths.append(os.path.normpath(path))
         return paths
 
+    def _is_ui_enabled(self) -> bool:
+        return getattr(self.btn_upload1, "state", "disabled") == "normal"
+
     def _is_supported_image_file(self, file_path: str) -> bool:
         return os.path.splitext(file_path)[1].lower() in SUPPORTED_IMAGE_EXTENSIONS
+
+    def _clear_similarity_image_zone(self, zone: int):
+        if zone == 1:
+            self.img1_path = None
+            self.img1_display.configure(image=None, text="No Image Selected")
+            self.img1_display.image = None
+            return
+        self.img2_path = None
+        self.img2_display.configure(image=None, text="No Image Selected")
+        self.img2_display.image = None
+
+    def _clear_extraction_source(self):
+        self.extraction_src_path = None
+        self.extraction_out_path = None
+        self.ext_display.configure(image=None, text="No Source Image Selected")
+        self.ext_display.image = None
 
     def _fit_preview_size(self, width: int, height: int, max_width: int, max_height: int) -> Tuple[int, int]:
         if width <= 0 or height <= 0:
@@ -303,9 +324,11 @@ class ModernGUI(DnDCTk):
 
     def _load_similarity_image(self, file_path: str, zone: int):
         if not os.path.isfile(file_path):
+            self._clear_similarity_image_zone(zone)
             self.sim_result_label.configure(text=f"Error loading image: file not found ({file_path})", text_color="red")
             return
         if not self._is_supported_image_file(file_path):
+            self._clear_similarity_image_zone(zone)
             self.sim_result_label.configure(
                 text="Error loading image: unsupported file type. Use PNG, JPG, JPEG, BMP, or WEBP.",
                 text_color="red",
@@ -315,7 +338,9 @@ class ModernGUI(DnDCTk):
         try:
             with Image.open(file_path) as opened:
                 img = opened.copy()
-            ctk_image = self._build_preview_image(img, max_width=250, max_height=250)
+            ctk_image = self._build_preview_image(
+                img, max_width=SIMILARITY_PREVIEW_MAX_SIZE[0], max_height=SIMILARITY_PREVIEW_MAX_SIZE[1]
+            )
 
             if zone == 1:
                 self.img1_path = file_path
@@ -325,14 +350,18 @@ class ModernGUI(DnDCTk):
                 self.img2_path = file_path
                 self.img2_display.configure(image=ctk_image, text="")
                 self.img2_display.image = ctk_image
+            self.sim_result_label.configure(text="", text_color="white")
         except Exception as e:
+            self._clear_similarity_image_zone(zone)
             self.sim_result_label.configure(text=f"Error loading image: {e}", text_color="red")
 
     def _load_extraction_source_image(self, file_path: str):
         if not os.path.isfile(file_path):
+            self._clear_extraction_source()
             self.ext_result_label.configure(text=f"Error loading image: file not found ({file_path})", text_color="red")
             return
         if not self._is_supported_image_file(file_path):
+            self._clear_extraction_source()
             self.ext_result_label.configure(
                 text="Error loading image: unsupported file type. Use PNG, JPG, JPEG, BMP, or WEBP.",
                 text_color="red",
@@ -342,7 +371,9 @@ class ModernGUI(DnDCTk):
         try:
             with Image.open(file_path) as opened:
                 img = opened.copy()
-            ctk_image = self._build_preview_image(img, max_width=300, max_height=300)
+            ctk_image = self._build_preview_image(
+                img, max_width=EXTRACTION_PREVIEW_MAX_SIZE[0], max_height=EXTRACTION_PREVIEW_MAX_SIZE[1]
+            )
             self.extraction_src_path = file_path
             self.extraction_out_path = self._resolve_extracted_output_path(file_path)
             self.ext_display.configure(image=ctk_image, text="")
@@ -353,16 +384,24 @@ class ModernGUI(DnDCTk):
                 self.ext_output_label.configure(
                     text="Output: skipped by existing_file_mode='skip' (existing extracted file found)"
                 )
+            self.ext_result_label.configure(text="", text_color="white")
         except Exception as e:
+            self._clear_extraction_source()
             self.ext_result_label.configure(text=f"Error loading image: {e}", text_color="red")
 
     def _handle_similarity_drop(self, data: str, zone: int):
+        if not self._is_ui_enabled():
+            self.sim_result_label.configure(text="Please wait for the current task to finish.", text_color="yellow")
+            return
         for file_path in self._extract_drop_paths(data):
             self._load_similarity_image(file_path, zone)
             return
         self.sim_result_label.configure(text="Error loading image: no files were dropped.", text_color="red")
 
     def _handle_extraction_drop(self, data: str):
+        if not self._is_ui_enabled():
+            self.ext_result_label.configure(text="Please wait for the current task to finish.", text_color="yellow")
+            return
         for file_path in self._extract_drop_paths(data):
             self._load_extraction_source_image(file_path)
             return

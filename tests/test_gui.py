@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 import types
 import unittest
@@ -266,31 +267,31 @@ class TestModernGUI(unittest.TestCase):
 
     def test_drop_similarity_image_updates_zone_state(self) -> None:
         app = self.gui_module.ModernGUI()
+        app._on_models_ready()
         event = types.SimpleNamespace(data="{C:/tmp/photo one.jpg}")
-        with (
-            patch("src.gui.os.path.isfile", return_value=True),
-            patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub()),
+        with patch("src.gui.os.path.isfile", return_value=True), patch.object(
+            self.gui_module.Image, "open", return_value=_ImageOpenStub()
         ):
             app._on_drop_similarity_image1(event)
-        self.assertEqual(app.img1_path, "C:\\tmp\\photo one.jpg")
+        self.assertEqual(app.img1_path, os.path.normpath("C:/tmp/photo one.jpg"))
         self.assertEqual(app.img1_display.text, "")
         self.assertIsNotNone(app.img1_display.image)
         self.assertEqual(app.img1_display.image.kwargs["size"], (250, 250))
 
     def test_drop_extraction_image_updates_source_and_output(self) -> None:
         app = self.gui_module.ModernGUI()
+        app._on_models_ready()
         event = types.SimpleNamespace(data="C:/tmp/front.png")
-        with (
-            patch("src.gui.os.path.isfile", return_value=True),
-            patch("src.gui.os.path.exists", return_value=False),
-            patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub()),
-        ):
+        with patch("src.gui.os.path.isfile", return_value=True), patch(
+            "src.gui.os.path.exists", return_value=False
+        ), patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub()):
             app._on_drop_extraction_source(event)
-        self.assertEqual(app.extraction_src_path, "C:\\tmp\\front.png")
+        self.assertEqual(app.extraction_src_path, os.path.normpath("C:/tmp/front.png"))
         self.assertIn("Output: extracted.png", app.ext_output_label.text)
 
     def test_drop_similarity_rejects_unsupported_file_types(self) -> None:
         app = self.gui_module.ModernGUI()
+        app._on_models_ready()
         event = types.SimpleNamespace(data="C:/tmp/not-image.txt")
         with patch("src.gui.os.path.isfile", return_value=True):
             app._on_drop_similarity_image2(event)
@@ -298,11 +299,10 @@ class TestModernGUI(unittest.TestCase):
 
     def test_upload_image_button_still_sets_selected_path(self) -> None:
         app = self.gui_module.ModernGUI()
-        with (
-            patch("src.gui.filedialog.askopenfilename", return_value="C:/tmp/picked.webp"),
-            patch("src.gui.os.path.isfile", return_value=True),
-            patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub()),
-        ):
+        app._on_models_ready()
+        with patch("src.gui.filedialog.askopenfilename", return_value="C:/tmp/picked.webp"), patch(
+            "src.gui.os.path.isfile", return_value=True
+        ), patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub()):
             app.upload_image(2)
         self.assertEqual(app.img2_path, "C:/tmp/picked.webp")
         self.assertIsNotNone(app.img2_display.image)
@@ -310,24 +310,59 @@ class TestModernGUI(unittest.TestCase):
 
     def test_upload_image_button_preserves_aspect_ratio(self) -> None:
         app = self.gui_module.ModernGUI()
-        with (
-            patch("src.gui.filedialog.askopenfilename", return_value="C:/tmp/wide.jpg"),
-            patch("src.gui.os.path.isfile", return_value=True),
-            patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub(size=(1200, 600))),
-        ):
+        app._on_models_ready()
+        with patch("src.gui.filedialog.askopenfilename", return_value="C:/tmp/wide.jpg"), patch(
+            "src.gui.os.path.isfile", return_value=True
+        ), patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub(size=(1200, 600))):
             app.upload_image(1)
         self.assertEqual(app.img1_display.image.kwargs["size"], (250, 125))
 
     def test_drop_extraction_image_preserves_aspect_ratio(self) -> None:
         app = self.gui_module.ModernGUI()
+        app._on_models_ready()
         event = types.SimpleNamespace(data="C:/tmp/tall.png")
-        with (
-            patch("src.gui.os.path.isfile", return_value=True),
-            patch("src.gui.os.path.exists", return_value=False),
-            patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub(size=(600, 1200))),
-        ):
+        with patch("src.gui.os.path.isfile", return_value=True), patch(
+            "src.gui.os.path.exists", return_value=False
+        ), patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub(size=(600, 1200))):
             app._on_drop_extraction_source(event)
         self.assertEqual(app.ext_display.image.kwargs["size"], (150, 300))
+
+    def test_similarity_error_clears_stale_selected_image(self) -> None:
+        app = self.gui_module.ModernGUI()
+        app._on_models_ready()
+        app.img1_path = "C:/tmp/old.png"
+        app.img1_display.configure(text="", image=object())
+        app.img1_display.image = object()
+        with patch("src.gui.os.path.isfile", return_value=False):
+            app._load_similarity_image("C:/tmp/missing.png", 1)
+        self.assertIsNone(app.img1_path)
+        self.assertEqual(app.img1_display.text, "No Image Selected")
+        self.assertIsNone(app.img1_display.image)
+
+    def test_extraction_error_clears_stale_selected_image(self) -> None:
+        app = self.gui_module.ModernGUI()
+        app._on_models_ready()
+        app.extraction_src_path = "C:/tmp/old.png"
+        app.extraction_out_path = "C:/tmp/extracted.png"
+        app.ext_display.configure(text="", image=object())
+        app.ext_display.image = object()
+        with patch("src.gui.os.path.isfile", return_value=False):
+            app._load_extraction_source_image("C:/tmp/missing.png")
+        self.assertIsNone(app.extraction_src_path)
+        self.assertIsNone(app.extraction_out_path)
+        self.assertEqual(app.ext_display.text, "No Source Image Selected")
+        self.assertIsNone(app.ext_display.image)
+
+    def test_drop_is_blocked_while_ui_disabled(self) -> None:
+        app = self.gui_module.ModernGUI()
+        event = types.SimpleNamespace(data="C:/tmp/new.png")
+        app.img1_path = "C:/tmp/current.png"
+        with patch("src.gui.os.path.isfile", return_value=True), patch.object(
+            self.gui_module.Image, "open", return_value=_ImageOpenStub()
+        ):
+            app._on_drop_similarity_image1(event)
+        self.assertEqual(app.img1_path, "C:/tmp/current.png")
+        self.assertIn("wait for the current task", app.sim_result_label.text.lower())
 
     def test_start_comparison_spawns_daemon_worker_and_updates_status(self) -> None:
         app = self.gui_module.ModernGUI()
