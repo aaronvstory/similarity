@@ -4,6 +4,7 @@ import importlib
 import sys
 import types
 import unittest
+from typing import ClassVar
 from unittest.mock import patch
 
 
@@ -108,34 +109,50 @@ class _EngineStub:
         return {"match": True, "score": 92.5, "error": None}
 
 
-class _ThreadCapture:
-    instances: list["_ThreadCapture"] = []
-
-    def __init__(self, target=None, args=(), daemon=None, **kwargs):
-        self.target = target
-        self.args = args
-        self.daemon = daemon
-        self.started = False
-        _ThreadCapture.instances.append(self)
-
-    def start(self):
-        self.started = True
+class _ThreadCaptureBase:
+    instances: ClassVar[list["_ThreadCaptureBase"]] = []
 
 
 class TestModernGUI(unittest.TestCase):
     def setUp(self) -> None:
-        _ThreadCapture.instances = []
+        self.thread_instances: list[_ThreadCaptureBase] = []
         self._original_gui_module = sys.modules.pop("src.gui", None)
         self.addCleanup(self._restore_gui_module)
 
         deepface_module = types.ModuleType("deepface")
         deepface_module.DeepFace = _DeepFaceStub
+        tkinter_module = types.ModuleType("tkinter")
+
+        class _TclError(Exception):
+            pass
+
+        filedialog_module = types.ModuleType("tkinter.filedialog")
+        filedialog_module.askopenfilename = lambda *args, **kwargs: ""
+        tkinter_module.TclError = _TclError
+        tkinter_module.filedialog = filedialog_module
+
+        parent = self
+
+        class _ThreadCapture(_ThreadCaptureBase):
+            def __init__(self, target=None, args=(), daemon=None, **kwargs):
+                self.target = target
+                self.args = args
+                self.daemon = daemon
+                self.started = False
+                parent.thread_instances.append(self)
+
+            def start(self):
+                self.started = True
+
+        self.thread_capture_class = _ThreadCapture
 
         patcher = patch.dict(
             sys.modules,
             {
                 "customtkinter": _CTkModuleStub(),
                 "deepface": deepface_module,
+                "tkinter": tkinter_module,
+                "tkinter.filedialog": filedialog_module,
             },
         )
         patcher.start()
@@ -144,7 +161,7 @@ class TestModernGUI(unittest.TestCase):
         self.gui_module = importlib.import_module("src.gui")
         self.gui_module = importlib.reload(self.gui_module)
 
-        self.thread_patcher = patch.object(self.gui_module.threading, "Thread", _ThreadCapture)
+        self.thread_patcher = patch.object(self.gui_module.threading, "Thread", self.thread_capture_class)
         self.thread_patcher.start()
         self.addCleanup(self.thread_patcher.stop)
 
@@ -159,8 +176,8 @@ class TestModernGUI(unittest.TestCase):
 
     def test_init_starts_model_warmup_on_daemon_thread(self) -> None:
         app = self.gui_module.ModernGUI()
-        self.assertEqual(len(_ThreadCapture.instances), 1)
-        thread = _ThreadCapture.instances[0]
+        self.assertEqual(len(self.thread_instances), 1)
+        thread = self.thread_instances[0]
         self.assertEqual(thread.target.__name__, "_init_models_thread")
         self.assertTrue(thread.daemon)
         self.assertTrue(thread.started)
@@ -180,12 +197,12 @@ class TestModernGUI(unittest.TestCase):
         app = self.gui_module.ModernGUI()
         app.img1_path = "img1.png"
         app.img2_path = "img2.png"
-        _ThreadCapture.instances = []
+        self.thread_instances = []
 
         app.start_comparison()
 
-        self.assertEqual(len(_ThreadCapture.instances), 1)
-        thread = _ThreadCapture.instances[0]
+        self.assertEqual(len(self.thread_instances), 1)
+        thread = self.thread_instances[0]
         self.assertEqual(thread.target.__name__, "_compare_thread")
         self.assertEqual(thread.args, ("img1.png", "img2.png"))
         self.assertTrue(thread.daemon)

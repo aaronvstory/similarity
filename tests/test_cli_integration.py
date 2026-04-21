@@ -25,19 +25,23 @@ class _DeepFaceStub:
         return [{"embedding": [1.0, 0.0, 0.0]}]
 
 
-deepface_module = types.ModuleType("deepface")
-deepface_module.DeepFace = _DeepFaceStub
-sys.modules["deepface"] = deepface_module
+def _load_cli_module_with_stub():
+    deepface_module = types.ModuleType("deepface")
+    deepface_module.DeepFace = _DeepFaceStub
 
-cli_module = importlib.import_module("src.cli")
-cli_module = importlib.reload(cli_module)
-ProCLI = cli_module.ProCLI
+    with patch.dict(sys.modules, {"deepface": deepface_module}, clear=False):
+        sys.modules.pop("src.engine", None)
+        sys.modules.pop("src.cli", None)
+        cli_module = importlib.import_module("src.cli")
+        cli_module = importlib.reload(cli_module)
+    return cli_module
 
 
 class TestCLIIntegration(unittest.TestCase):
     def setUp(self) -> None:
-        with patch("src.cli.console.print"):
-            self.cli = ProCLI()
+        self.cli_module = _load_cli_module_with_stub()
+        with patch.object(self.cli_module.console, "print"):
+            self.cli = self.cli_module.ProCLI()
 
     def _create_seed_fixture(self, root: Path) -> Path:
         seed_root = root / "seed-fixture"
@@ -59,7 +63,7 @@ class TestCLIIntegration(unittest.TestCase):
 
             with (
                 patch.object(self.cli, "_ensure_models_initialized"),
-                patch("src.cli.console.print"),
+                patch.object(self.cli_module.console, "print"),
                 patch.object(self.cli.engine, "extract_face", side_effect=fake_extract_face),
             ):
                 self.cli.run_batch_extraction(
@@ -75,7 +79,7 @@ class TestCLIIntegration(unittest.TestCase):
             self.cli.config["img2_keyword"] = "front"
             with (
                 patch.object(self.cli, "_ensure_models_initialized"),
-                patch("src.cli.console.print"),
+                patch.object(self.cli_module.console, "print"),
                 patch.object(
                     self.cli.engine,
                     "compare_images",
