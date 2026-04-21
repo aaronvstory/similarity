@@ -145,6 +145,20 @@ class FaceEngine:
         if cv_img is None:
             raise ValueError(f"Unable to read image data via OpenCV: {image_path}")
 
+    def _face_area(self, face_data: Dict[str, Any]) -> int:
+        facial_area = face_data.get("facial_area", {}) if isinstance(face_data, dict) else {}
+        width = facial_area.get("w", 0)
+        height = facial_area.get("h", 0)
+        try:
+            return int(max(0, width) * max(0, height))
+        except Exception:
+            return 0
+
+    def _select_prominent_face(self, faces: Any, image_label: str) -> Any:
+        if not faces:
+            raise ValueError(f"No face detected in {image_label}.")
+        return max(faces, key=self._face_area)
+
     def compare_images(self, img1_path: str, img2_path: str) -> Dict[str, Union[bool, float, str]]:
         """
         Compares two images using the configured ML models.
@@ -166,27 +180,29 @@ class FaceEngine:
             faces1 = DeepFace.extract_faces(
                 img_path=img1_path, 
                 detector_backend=self.detector_backend, 
-                enforce_detection=True
+                enforce_detection=True,
+                normalize_face=False,
+                color_face="bgr",
             )
             faces2 = DeepFace.extract_faces(
                 img_path=img2_path, 
                 detector_backend=self.detector_backend, 
-                enforce_detection=True
+                enforce_detection=True,
+                normalize_face=False,
+                color_face="bgr",
             )
 
-            if len(faces1) > 1:
-                return {"match": False, "score": 0.0, "error": f"Multiple faces detected in image 1. Please use a photo with only one clearly visible face."}
-            if len(faces2) > 1:
-                return {"match": False, "score": 0.0, "error": f"Multiple faces detected in image 2. Please use a photo with only one clearly visible face."}
+            face1 = self._select_prominent_face(faces1, "image 1")
+            face2 = self._select_prominent_face(faces2, "image 2")
 
             # 3. Perform Verification
             result = DeepFace.verify(
-                img1_path=img1_path,
-                img2_path=img2_path,
+                img1_path=face1["face"],
+                img2_path=face2["face"],
                 model_name=self.model_name,
-                detector_backend=self.detector_backend,
+                detector_backend="skip",
                 distance_metric=self.distance_metric,
-                enforce_detection=True,
+                enforce_detection=False,
                 align=True
             )
 

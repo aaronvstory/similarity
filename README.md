@@ -6,10 +6,15 @@ An enterprise-grade local offline Face Similarity application in Python. This to
 - **Local & Offline Execution**: No biometric data is sent to the cloud. Everything runs locally on your machine.
 - **Dual Interfaces**: 
   - **Modern GUI**: Built with `customtkinter`, featuring a dark-mode, drag-and-drop/clickable upload interface with multithreaded processing to ensure zero freezing.
-  - **Pro CLI**: Built with `rich`, featuring an interactive menu for single comparison, automated batch similarity scanning, batch face extraction, and dynamic regex searching.
+  - **Pro CLI**: Built with `rich`, featuring an interactive menu for single comparison, automated batch similarity scanning, batch face extraction, and regex-first keyword search with fuzzy fallback.
 - **Batch Face Extraction**: Automatically find and crop faces from source images (e.g., driver's licenses) found in recursive folder structures.
 - **Accurate Mathematics**: Internally converts DeepFace's raw cosine distance into a human-readable 0-100% percentage grade, matching industry-standard strictness (where a score of >= 80% represents a match).
-- **Automated Folder Renaming**: In Batch CLI mode, automatically appends similarity scores into directory names for incredibly fast KYC/Persona reviewing.
+- **Automated Folder Renaming**: In Batch CLI mode, folder score tags are overwritten in place (not duplicated) for incredibly fast KYC/Persona reviewing.
+- **Prominent Face Selection**: If multiple faces are detected, the largest detected face is automatically used for similarity comparison.
+
+## Project Structure
+- Root-only runtime project (`main.py`, `src/`, launch scripts, and `.venv`).
+- No nested duplicate app folder is required for normal operation.
 
 ## Installation
 
@@ -43,14 +48,15 @@ python main.py --cli        # Launch CLI
 1. Run the CLI launcher (`run_cli.bat` or `run_cli.command`).
 2. The interactive Main Menu will appear. 
 3. **Face Extraction**: 
-   - Choose **Option 3 (Batch Face Extraction)**.
-   - Choose **Option 4 (Settings)** first if your source images are not named "front".
-   - Select the root folder. The app will find "front.jpg" (or similar), crop the face, and save it as "extracted.jpg" in the same folder, skipping if it already exists.
+   - Choose **Option 4 (Batch Face Extraction)**.
+   - Choose **Option 5 (Settings)** first if your source images are not named "front".
+   - Select the root folder. The app will find "front.jpg" (or similar), crop the face, and save it as "extracted.jpg" in the same folder.
+   - By default (`existing_file_mode = "index"`), if `extracted.jpg` already exists it writes `extracted2.jpg` (then `extracted3.jpg`, etc.). It only skips when Settings sets mode to `skip`.
 4. **Similarity Check**:
    - Choose **Option 2 (Batch Folder Similarity Check)**.
-   - Choose **Option 4 (Settings)** first if your images are not named "extracted" and "selfie".
+   - Choose **Option 5 (Settings)** first if your images are not named "extracted" and "selfie".
    - Select the root folder. The app will recursively scan every folder. If a folder contains both images, it runs the ArcFace ML models on them.
-   - A live progress bar and table will display the results, and the directory will be automatically renamed to include the rounded similarity score.
+   - A live progress bar and table will display the results, and the directory will be automatically renamed with a single rounded similarity score token.
 
 ## Models Used
 - **Detector**: `retinaface` (Robust face detection and 5-point alignment)
@@ -58,4 +64,4 @@ python main.py --cli        # Launch CLI
 - **Metric**: Cosine Distance
 
 ## Contribution
-Check `agents.md` and `claude.md` for AI context if you are utilizing LLMs to contribute to this codebase. See `CHANGELOG.md` for recent updates.
+See `CONTRIBUTING.md` for workflow, architecture, dependency, UX, and testing guidance. Check `agents.md` and `claude.md` for AI context if you are utilizing LLMs to contribute to this codebase. See `CHANGELOG.md` for recent updates.

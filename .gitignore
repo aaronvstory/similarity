@@ -1,0 +1,17 @@
+# Python virtual environments
+.venv/
+**/.venv/
+venv/
+**/venv/
+
+# Python cache/artifacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Local runtime/model artifacts
+src/models/
+
+# Local-only workspace files
+.DS_Store
+config.json
