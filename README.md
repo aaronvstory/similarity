@@ -44,7 +44,12 @@ python main.py              # Launch GUI
 python main.py --cli        # Launch CLI
 python main.py --mode similarity --root /path/to/root --yes
 python main.py --mode extract --root /path/to/root --yes
+python main.py --mode compare --img1 /path/to/extracted.png --img2 /path/to/selfie.png
 ```
+
+Explicit compare mode requires both `--img1` and `--img2`. CLI configuration overrides such as
+`--img1-keyword`, `--img2-keyword`, `--extraction-keyword`, `--padding-ratio`, and
+`--existing-file-mode` now also force CLI routing even without `--cli`.
 
 ## Batch Processing Usage (CLI)
 1. Run the CLI launcher (`run_cli.bat` or `run_cli.command`).
@@ -59,6 +64,11 @@ python main.py --mode extract --root /path/to/root --yes
    - Choose **Option 5 (Settings)** first if your images are not named "extracted" and "selfie".
    - Select the root folder. The app will recursively scan every folder. If a folder contains both images, it runs the ArcFace ML models on them.
    - A live progress bar and table will display the results, and the directory will be automatically renamed with a single rounded similarity score token.
+
+## CLI Notes
+- `apply_runtime_config` rejects invalid `existing_file_mode` values instead of silently defaulting. Valid values are `index`, `skip`, and `overwrite`.
+- `padding_ratio` must stay within `0.0` to `1.0`.
+- Keyword matching is regex-first with fuzzy fallback, so a configured keyword such as `selfie` can still match files like `selfie expanded.png`.
 
 ## Models Used
 - **Detector**: `retinaface` (Robust face detection and 5-point alignment)

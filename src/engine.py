@@ -73,7 +73,10 @@ class FaceEngine:
     def shutdown(self) -> None:
         """Release any executor resources created for async warmup."""
         if self._executor is not None:
-            self._executor.shutdown(wait=False, cancel_futures=True)
+            try:
+                self._executor.shutdown(wait=False, cancel_futures=True)
+            except TypeError:
+                self._executor.shutdown(wait=False)
             self._executor = None
 
     def _ensure_extraction_models(self) -> None:

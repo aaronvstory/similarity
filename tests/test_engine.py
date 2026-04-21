@@ -80,6 +80,26 @@ class TestFaceEngine(unittest.TestCase):
 
         self.assertEqual(distance, 0.0)
 
+    def test_shutdown_falls_back_when_cancel_futures_is_unsupported(self) -> None:
+        engine = self.engine_module.FaceEngine()
+
+        class ExecutorStub:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def shutdown(self, wait=False, cancel_futures=False):
+                self.calls.append((wait, cancel_futures))
+                if cancel_futures:
+                    raise TypeError("cancel_futures unsupported")
+
+        executor = ExecutorStub()
+        engine._executor = executor
+
+        engine.shutdown()
+
+        self.assertEqual(executor.calls, [(False, True), (False, False)])
+        self.assertIsNone(engine._executor)
+
 
 if __name__ == "__main__":
     unittest.main()

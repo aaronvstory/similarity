@@ -86,6 +86,26 @@ class TestProCLI(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "padding_ratio"):
             self.cli.apply_runtime_config(padding_ratio=2.0)
 
+    def test_validate_padding_ratio_accepts_bounds(self) -> None:
+        self.assertEqual(self.cli._validate_padding_ratio(0.0), 0.0)
+        self.assertEqual(self.cli._validate_padding_ratio(1.0), 1.0)
+
+    def test_create_file_dialog_root_raises_runtime_error_without_tk(self) -> None:
+        original_import = builtins.__import__
+
+        def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "tkinter":
+                raise ImportError("tk missing")
+            return original_import(name, globals, locals, fromlist, level)
+
+        with patch("builtins.__import__", side_effect=guarded_import):
+            with self.assertRaisesRegex(RuntimeError, "Tk file dialogs are unavailable"):
+                self.cli._create_file_dialog_root()
+
+    def test_apply_runtime_config_rejects_invalid_existing_file_mode(self) -> None:
+        with self.assertRaisesRegex(ValueError, "existing_file_mode"):
+            self.cli.apply_runtime_config(existing_file_mode="bogus")
+
     def test_get_available_path_forces_index_when_source_is_already_extracted(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             source = Path(tmpdir) / "extracted.png"

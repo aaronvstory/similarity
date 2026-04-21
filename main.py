@@ -50,6 +50,11 @@ def main():
         or args.img1
         or args.img2
         or args.root
+        or args.img1_keyword
+        or args.img2_keyword
+        or args.extraction_keyword
+        or args.padding_ratio is not None
+        or args.existing_file_mode
     )
 
     if not cli_requested:
