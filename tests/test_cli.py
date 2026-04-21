@@ -172,6 +172,78 @@ class TestProCLI(unittest.TestCase):
 
         self.assertEqual(rename_order, [str(child), str(parent)])
 
+    def test_find_image_with_keyword_matches_fuzzy_front_variant(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            folder = Path(tmpdir)
+            (folder / "fronnt_scan.png").write_bytes(b"fake")
+
+            matched = self.cli._find_image_with_keyword(str(folder), "front")
+
+        self.assertIsNotNone(matched)
+        self.assertEqual(Path(matched).name, "fronnt_scan.png")
+
+    def test_find_image_with_keyword_matches_fuzzy_extracted_variant(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            folder = Path(tmpdir)
+            (folder / "extrcted-selfie.png").write_bytes(b"fake")
+
+            matched = self.cli._find_image_with_keyword(str(folder), "extracted")
+
+        self.assertIsNotNone(matched)
+        self.assertEqual(Path(matched).name, "extrcted-selfie.png")
+
+    def test_find_image_with_keyword_handles_invalid_regex(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            folder = Path(tmpdir)
+            (folder / "front.png").write_bytes(b"fake")
+
+            matched = self.cli._find_image_with_keyword(str(folder), "[")
+
+        self.assertIsNone(matched)
+
+    def test_get_new_folder_name_replaces_existing_percent_score(self) -> None:
+        old_folder = str(Path("C:/tmp") / "DASHER 100% - Jane Doe (123)_front")
+
+        new_folder = self.cli._get_new_folder_name(old_folder, 88.9)
+
+        self.assertEqual(Path(new_folder).name, "DASHER 88 - Jane Doe (123)_front")
+
+    def test_run_dispatches_each_menu_option_handler(self) -> None:
+        option_to_handler = {
+            "1": "_run_single_comparison",
+            "2": "_run_batch_processing",
+            "3": "_run_single_extraction",
+            "4": "_run_batch_extraction",
+            "5": "_run_settings",
+        }
+
+        for option, handler_name in option_to_handler.items():
+            with self.subTest(option=option):
+                with (
+                    patch("src.cli.Prompt.ask", side_effect=[option, "6"]),
+                    patch.object(self.cli, "_display_current_settings"),
+                    patch("src.cli.console.print"),
+                    patch.object(self.cli, handler_name) as handler,
+                ):
+                    self.cli.run()
+                handler.assert_called_once_with()
+
+    def test_run_main_menu_renders_expected_options(self) -> None:
+        with (
+            patch("src.cli.Prompt.ask", side_effect=["6"]),
+            patch.object(self.cli, "_display_current_settings"),
+            patch("src.cli.console.print") as mock_print,
+        ):
+            self.cli.run()
+
+        printed_lines = " ".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)
+        self.assertIn("1. Single Similarity Comparison", printed_lines)
+        self.assertIn("2. Batch Folder Similarity Check", printed_lines)
+        self.assertIn("3. Single Face Extraction", printed_lines)
+        self.assertIn("4. Batch Face Extraction", printed_lines)
+        self.assertIn("5. Settings", printed_lines)
+        self.assertIn("6. Exit", printed_lines)
+
 
 if __name__ == "__main__":
     unittest.main()
