@@ -159,15 +159,13 @@ class TestProCLI(unittest.TestCase):
                     return os.path.join(dirpath, f"{keyword}.jpg")
                 return None
 
-            with (
-                patch.object(self.cli, "_ensure_models_initialized"),
-                patch.object(self.cli, "_log_to_manifest"),
-                patch.object(self.cli, "_find_image_with_keyword", side_effect=find_stub),
-                patch.object(self.cli.engine, "compare_images", return_value={"match": True, "score": 91.0, "error": None}),
-                patch("src.cli.os.walk", side_effect=walk_stub),
-                patch("src.cli.os.rename", side_effect=lambda src, dst: rename_order.append(src)),
-                patch("src.cli.console.print"),
-            ):
+            with patch.object(self.cli, "_ensure_models_initialized"), \
+                patch.object(self.cli, "_log_to_manifest"), \
+                patch.object(self.cli, "_find_image_with_keyword", side_effect=find_stub), \
+                patch.object(self.cli.engine, "compare_images", return_value={"match": True, "score": 91.0, "error": None}), \
+                patch("src.cli.os.walk", side_effect=walk_stub), \
+                patch("src.cli.os.rename", side_effect=lambda src, dst: rename_order.append(src)), \
+                patch("src.cli.console.print"):
                 self.cli.run_batch_similarity(root_dir=str(root), confirm=False)
 
         self.assertEqual(rename_order, [str(child), str(parent)])
@@ -217,12 +215,10 @@ class TestProCLI(unittest.TestCase):
 
         for section, handler_name in section_to_handler.items():
             with self.subTest(section=section):
-                with (
-                    patch("src.cli.Prompt.ask", side_effect=[section, "4"]),
-                    patch.object(self.cli, "_display_current_settings"),
-                    patch("src.cli.console.print"),
-                    patch.object(self.cli, handler_name) as handler,
-                ):
+                with patch("src.cli.Prompt.ask", side_effect=[section, "4"]), \
+                    patch.object(self.cli, "_display_current_settings"), \
+                    patch("src.cli.console.print"), \
+                    patch.object(self.cli, handler_name) as handler:
                     self.cli.run()
                 handler.assert_called_once_with()
 
@@ -234,11 +230,9 @@ class TestProCLI(unittest.TestCase):
 
         for option, handler_name in option_to_handler.items():
             with self.subTest(option=option):
-                with (
-                    patch("src.cli.Prompt.ask", side_effect=[option, "3"]),
-                    patch("src.cli.console.print"),
-                    patch.object(self.cli, handler_name) as handler,
-                ):
+                with patch("src.cli.Prompt.ask", side_effect=[option, "3"]), \
+                    patch("src.cli.console.print"), \
+                    patch.object(self.cli, handler_name) as handler:
                     self.cli._run_similarity_menu()
                 handler.assert_called_once_with()
 
@@ -250,51 +244,41 @@ class TestProCLI(unittest.TestCase):
 
         for option, handler_name in option_to_handler.items():
             with self.subTest(option=option):
-                with (
-                    patch("src.cli.Prompt.ask", side_effect=[option, "3"]),
-                    patch("src.cli.console.print"),
-                    patch.object(self.cli, handler_name) as handler,
-                ):
+                with patch("src.cli.Prompt.ask", side_effect=[option, "3"]), \
+                    patch("src.cli.console.print"), \
+                    patch.object(self.cli, handler_name) as handler:
                     self.cli._run_extraction_menu()
                 handler.assert_called_once_with()
 
     def test_similarity_menu_back_returns_without_running_handlers(self) -> None:
-        with (
-            patch("src.cli.Prompt.ask", return_value="3"),
-            patch("src.cli.console.print"),
-            patch.object(self.cli, "_run_single_comparison") as single,
-            patch.object(self.cli, "_run_batch_processing") as batch,
-        ):
+        with patch("src.cli.Prompt.ask", return_value="3"), \
+            patch("src.cli.console.print"), \
+            patch.object(self.cli, "_run_single_comparison") as single, \
+            patch.object(self.cli, "_run_batch_processing") as batch:
             self.cli._run_similarity_menu()
         single.assert_not_called()
         batch.assert_not_called()
 
     def test_extraction_menu_back_returns_without_running_handlers(self) -> None:
-        with (
-            patch("src.cli.Prompt.ask", return_value="3"),
-            patch("src.cli.console.print"),
-            patch.object(self.cli, "_run_single_extraction") as single,
-            patch.object(self.cli, "_run_batch_extraction") as batch,
-        ):
+        with patch("src.cli.Prompt.ask", return_value="3"), \
+            patch("src.cli.console.print"), \
+            patch.object(self.cli, "_run_single_extraction") as single, \
+            patch.object(self.cli, "_run_batch_extraction") as batch:
             self.cli._run_extraction_menu()
         single.assert_not_called()
         batch.assert_not_called()
 
     def test_run_exit_prints_exit_message(self) -> None:
-        with (
-            patch("src.cli.Prompt.ask", return_value="4"),
-            patch.object(self.cli, "_display_current_settings"),
-            patch("src.cli.console.print") as mock_print,
-        ):
+        with patch("src.cli.Prompt.ask", return_value="4"), \
+            patch.object(self.cli, "_display_current_settings"), \
+            patch("src.cli.console.print") as mock_print:
             self.cli.run()
         self.assertTrue(any("[green]Exiting...[/green]" in str(call.args[0]) for call in mock_print.call_args_list if call.args))
 
     def test_run_main_menu_renders_expected_options(self) -> None:
-        with (
-            patch("src.cli.Prompt.ask", side_effect=["4"]),
-            patch.object(self.cli, "_display_current_settings"),
-            patch("src.cli.console.print") as mock_print,
-        ):
+        with patch("src.cli.Prompt.ask", side_effect=["4"]), \
+            patch.object(self.cli, "_display_current_settings"), \
+            patch("src.cli.console.print") as mock_print:
             self.cli.run()
 
         printed_lines = " ".join(str(call.args[0]) for call in mock_print.call_args_list if call.args)

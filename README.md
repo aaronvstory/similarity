@@ -55,13 +55,13 @@ Explicit compare mode requires both `--img1` and `--img2`. CLI configuration ove
 1. Run the CLI launcher (`run_cli.bat` or `run_cli.command`).
 2. The interactive sections menu will appear with **Similarity**, **Extraction**, **Settings**, and **Exit**.
 3. **Face Extraction**: 
-   - Choose **Extraction** then **Batch Face Extraction**.
    - Choose **Settings** first if your source images are not named "front".
+   - Then choose **Extraction** then **Batch Face Extraction**.
    - Select the root folder. The app will find "front.jpg" (or similar), crop the face, and save it as "extracted.jpg" in the same folder.
    - By default (`existing_file_mode = "index"`), if `extracted.jpg` already exists it writes `extracted2.jpg` (then `extracted3.jpg`, etc.). It only skips when Settings sets mode to `skip`.
 4. **Similarity Check**:
-   - Choose **Similarity** then **Batch Folder Similarity Check**.
    - Choose **Settings** first if your images are not named "extracted" and "selfie".
+   - Then choose **Similarity** then **Batch Folder Similarity Check**.
    - Select the root folder. The app will recursively scan every folder. If a folder contains both images, it runs the ArcFace ML models on them.
    - A live progress bar and table will display the results, and the directory will be automatically renamed with a single rounded similarity score token.
 

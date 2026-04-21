@@ -229,7 +229,8 @@ class ModernGUI(ctk.CTk):
             return
 
         try:
-            img = Image.open(file_path)
+            with Image.open(file_path) as opened:
+                img = opened.copy()
             ctk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 250))
 
             if zone == 1:
@@ -246,14 +247,17 @@ class ModernGUI(ctk.CTk):
     def _next_extracted_path(self, source_path: str) -> str:
         directory = os.path.dirname(source_path)
         ext = os.path.splitext(source_path)[1] or ".png"
+        source_norm = os.path.normcase(os.path.normpath(source_path))
         first = os.path.join(directory, f"extracted{ext}")
-        if not os.path.exists(first):
+        first_norm = os.path.normcase(os.path.normpath(first))
+        if first_norm != source_norm and not os.path.exists(first):
             return first
 
         idx = 2
         while True:
             candidate = os.path.join(directory, f"extracted{idx}{ext}")
-            if not os.path.exists(candidate):
+            candidate_norm = os.path.normcase(os.path.normpath(candidate))
+            if candidate_norm != source_norm and not os.path.exists(candidate):
                 return candidate
             idx += 1
 
@@ -270,7 +274,7 @@ class ModernGUI(ctk.CTk):
         target_norm = os.path.normcase(os.path.normpath(target))
         force_index = source_norm == target_norm
 
-        if not os.path.exists(target):
+        if not force_index and not os.path.exists(target):
             return target
         if mode == "skip" and not force_index:
             return None
@@ -287,7 +291,8 @@ class ModernGUI(ctk.CTk):
             return
 
         try:
-            img = Image.open(file_path)
+            with Image.open(file_path) as opened:
+                img = opened.copy()
             ctk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(300, 300))
             self.extraction_src_path = file_path
             self.extraction_out_path = self._resolve_extracted_output_path(file_path)
