@@ -172,29 +172,53 @@ class ProCLI:
             return
 
         while True:
-            console.print("\n[bold]Main Menu[/bold]")
+            console.print("\n[bold cyan]Workflow Sections[/bold cyan]")
+            console.print("1. Similarity")
+            console.print("2. Extraction")
+            console.print("3. Settings")
+            console.print("4. Exit")
+
+            choice = Prompt.ask("Choose a section", choices=["1", "2", "3", "4"], default="1")
+
+            if choice == "1":
+                self._run_similarity_menu()
+            elif choice == "2":
+                self._run_extraction_menu()
+            elif choice == "3":
+                self._run_settings()
+            elif choice == "4":
+                console.print("[green]Exiting...[/green]")
+                break
+
+    def _run_similarity_menu(self) -> None:
+        while True:
+            console.print("\n[bold magenta]Similarity Menu[/bold magenta]")
             console.print("1. Single Similarity Comparison")
             console.print("2. Batch Folder Similarity Check")
-            console.print("3. Single Face Extraction")
-            console.print("4. Batch Face Extraction")
-            console.print("5. Settings")
-            console.print("6. Exit")
-            
-            choice = Prompt.ask("Choose an option", choices=["1", "2", "3", "4", "5", "6"], default="1")
-            
+            console.print("3. Back")
+
+            choice = Prompt.ask("Choose an option", choices=["1", "2", "3"], default="1")
             if choice == "1":
                 self._run_single_comparison()
             elif choice == "2":
                 self._run_batch_processing()
             elif choice == "3":
+                return
+
+    def _run_extraction_menu(self) -> None:
+        while True:
+            console.print("\n[bold magenta]Extraction Menu[/bold magenta]")
+            console.print("1. Single Face Extraction")
+            console.print("2. Batch Face Extraction")
+            console.print("3. Back")
+
+            choice = Prompt.ask("Choose an option", choices=["1", "2", "3"], default="1")
+            if choice == "1":
                 self._run_single_extraction()
-            elif choice == "4":
+            elif choice == "2":
                 self._run_batch_extraction()
-            elif choice == "5":
-                self._run_settings()
-            elif choice == "6":
-                console.print("[green]Exiting...[/green]")
-                break
+            elif choice == "3":
+                return
 
     def _run_settings(self):
         console.print("\n[bold magenta]--- Settings ---[/bold magenta]")

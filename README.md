@@ -5,8 +5,8 @@ An enterprise-grade local offline Face Similarity application in Python. This to
 ## Features
 - **Local & Offline Execution**: No biometric data is sent to the cloud. Everything runs locally on your machine.
 - **Dual Interfaces**: 
-  - **Modern GUI**: Built with `customtkinter`, featuring a dark-mode tabbed workspace that separates similarity and extraction workflows while keeping long-running ML work on background threads.
-  - **Pro CLI**: Built with `rich`, featuring an interactive menu for single comparison, automated batch similarity scanning, batch face extraction, and regex-first keyword search with fuzzy fallback.
+  - **Modern GUI**: Built with `customtkinter`, featuring dark-mode **Similarity** and **Extraction** tabs while keeping long-running ML work on background threads.
+  - **Pro CLI**: Built with `rich`, featuring a sectioned interactive menu with dedicated **Similarity** and **Extraction** submenus, plus regex-first keyword search with fuzzy fallback.
 - **Batch Face Extraction**: Automatically find and crop faces from source images (e.g., driver's licenses) found in recursive folder structures.
 - **Accurate Mathematics**: Internally converts DeepFace's raw cosine distance into a human-readable 0-100% percentage grade, matching industry-standard strictness (where a score of >= 80% represents a match).
 - **Automated Folder Renaming**: In Batch CLI mode, folder score tags are overwritten in place (not duplicated) for incredibly fast KYC/Persona reviewing.
@@ -53,15 +53,15 @@ Explicit compare mode requires both `--img1` and `--img2`. CLI configuration ove
 
 ## Batch Processing Usage (CLI)
 1. Run the CLI launcher (`run_cli.bat` or `run_cli.command`).
-2. The interactive Main Menu will appear. 
+2. The interactive sections menu will appear with **Similarity**, **Extraction**, **Settings**, and **Exit**.
 3. **Face Extraction**: 
-   - Choose **Option 4 (Batch Face Extraction)**.
-   - Choose **Option 5 (Settings)** first if your source images are not named "front".
+   - Choose **Settings** first if your source images are not named "front".
+   - Then choose **Extraction** then **Batch Face Extraction**.
    - Select the root folder. The app will find "front.jpg" (or similar), crop the face, and save it as "extracted.jpg" in the same folder.
    - By default (`existing_file_mode = "index"`), if `extracted.jpg` already exists it writes `extracted2.jpg` (then `extracted3.jpg`, etc.). It only skips when Settings sets mode to `skip`.
 4. **Similarity Check**:
-   - Choose **Option 2 (Batch Folder Similarity Check)**.
-   - Choose **Option 5 (Settings)** first if your images are not named "extracted" and "selfie".
+   - Choose **Settings** first if your images are not named "extracted" and "selfie".
+   - Then choose **Similarity** then **Batch Folder Similarity Check**.
    - Select the root folder. The app will recursively scan every folder. If a folder contains both images, it runs the ArcFace ML models on them.
    - A live progress bar and table will display the results, and the directory will be automatically renamed with a single rounded similarity score token.
 
