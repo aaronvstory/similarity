@@ -173,7 +173,7 @@ class ProCLI:
 
         while True:
             console.print("\n[bold cyan]Workflow Sections[/bold cyan]")
-            console.print("[dim]Tip: choose 1 for Similarity actions, 2 for Extraction actions.[/dim]")
+            console.print("[dim]Tip: Choose 1 or 2 to access specific workflow submenus.[/dim]")
             console.print("1. Similarity")
             console.print("2. Extraction")
             console.print("3. Settings")
