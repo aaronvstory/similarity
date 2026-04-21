@@ -1,5 +1,6 @@
 import os
 import threading
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Dict, Union, Any, Optional
 import urllib.request
 
@@ -48,6 +49,7 @@ class FaceEngine:
         self.caffemodel_url = "https://raw.githubusercontent.com/opencv/opencv_3rdparty/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel"
         
         self.extraction_net = None
+        self._executor: Optional[ThreadPoolExecutor] = None
         self._initialized = True
 
     def initialize_models(self) -> None:
@@ -60,6 +62,18 @@ class FaceEngine:
             DeepFace.build_model(model_name=self.model_name)
         except Exception as e:
             raise RuntimeError(f"Failed to initialize Face Models: {e}")
+
+    def initialize_async(self) -> Future:
+        """Warm the heavy ArcFace model on a background worker."""
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="face-engine")
+        return self._executor.submit(self.initialize_models)
+
+    def shutdown(self) -> None:
+        """Release any executor resources created for async warmup."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False, cancel_futures=True)
+            self._executor = None
 
     def _ensure_extraction_models(self) -> None:
         """Downloads the OpenCV DNN face detection models if missing."""
@@ -181,15 +195,11 @@ class FaceEngine:
                 img_path=img1_path, 
                 detector_backend=self.detector_backend, 
                 enforce_detection=True,
-                normalize_face=False,
-                color_face="bgr",
             )
             faces2 = DeepFace.extract_faces(
                 img_path=img2_path, 
                 detector_backend=self.detector_backend, 
                 enforce_detection=True,
-                normalize_face=False,
-                color_face="bgr",
             )
 
             face1 = self._select_prominent_face(faces1, "image 1")

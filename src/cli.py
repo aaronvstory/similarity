@@ -81,7 +81,7 @@ class ProCLI:
 
     def save_config(self):
         try:
-            with open(self.config_path, "w") as f:
+            with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(self.config, f, indent=4)
         except Exception as e:
             console.print(f"[red]Error: Could not save config.json ({e}).[/red]")
@@ -327,8 +327,12 @@ class ProCLI:
             console.print(f"[red]Failed to write manifest: {e}[/red]")
 
     def _run_batch_extraction(self):
+        self.run_batch_extraction()
+
+    def run_batch_extraction(self, root_dir: Optional[str] = None, confirm: bool = True) -> None:
         console.print("[yellow]Please select the root directory for batch extraction...[/yellow]")
-        root_dir = self.prompt_for_directory("Select Root Directory")
+        if not root_dir:
+            root_dir = self.prompt_for_directory("Select Root Directory")
         if not root_dir:
             console.print("[yellow]Action cancelled. No root directory selected.[/yellow]")
             return
@@ -348,7 +352,7 @@ class ProCLI:
             return
 
         console.print(f"Found [bold]{len(folders_to_process)}[/bold] images to process.")
-        if not Confirm.ask("Proceed?"):
+        if confirm and not Confirm.ask("Proceed?"):
             return
 
         self._ensure_models_initialized()
@@ -452,8 +456,12 @@ class ProCLI:
         return os.path.join(parent_dir, new_name)
 
     def _run_batch_processing(self):
+        self.run_batch_similarity()
+
+    def run_batch_similarity(self, root_dir: Optional[str] = None, confirm: bool = True) -> None:
         console.print("[yellow]Please select root for similarity check...[/yellow]")
-        root_dir = self.prompt_for_directory("Select Root Directory")
+        if not root_dir:
+            root_dir = self.prompt_for_directory("Select Root Directory")
         if not root_dir:
             console.print("[yellow]Action cancelled. No root directory selected.[/yellow]")
             return
@@ -476,7 +484,7 @@ class ProCLI:
             return
 
         console.print(f"Found [bold]{len(folders_to_process)}[/bold] folders. Proceed?")
-        if not Confirm.ask("Proceed?"):
+        if confirm and not Confirm.ask("Proceed?"):
             return
 
         self._ensure_models_initialized()
@@ -515,6 +523,32 @@ class ProCLI:
         console.print(results_table)
         self._log_to_manifest(root_dir, "batch_similarity", op_results)
         console.print(f"\n[bold green]Complete. Manifest saved to {root_dir}/manifest.json[/bold green]")
+
+    def apply_runtime_config(
+        self,
+        *,
+        img1_keyword: Optional[str] = None,
+        img2_keyword: Optional[str] = None,
+        extraction_keyword: Optional[str] = None,
+        padding_ratio: Optional[float] = None,
+        existing_file_mode: Optional[str] = None,
+    ) -> None:
+        if img1_keyword:
+            self.config["img1_keyword"] = img1_keyword
+        if img2_keyword:
+            self.config["img2_keyword"] = img2_keyword
+        if extraction_keyword:
+            self.config["extraction_keyword"] = extraction_keyword
+        if padding_ratio is not None:
+            self.config["padding_ratio"] = float(padding_ratio)
+        if existing_file_mode:
+            if existing_file_mode in self.VALID_EXISTING_FILE_MODES:
+                self.config["existing_file_mode"] = existing_file_mode
+            else:
+                console.print(
+                    "[yellow]Warning: Invalid `existing_file_mode` override; defaulting to 'index'.[/yellow]"
+                )
+                self.config["existing_file_mode"] = "index"
 
     def _display_result(self, result: dict) -> None:
         if result.get("error"):

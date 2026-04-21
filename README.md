@@ -5,7 +5,7 @@ An enterprise-grade local offline Face Similarity application in Python. This to
 ## Features
 - **Local & Offline Execution**: No biometric data is sent to the cloud. Everything runs locally on your machine.
 - **Dual Interfaces**: 
-  - **Modern GUI**: Built with `customtkinter`, featuring a dark-mode, drag-and-drop/clickable upload interface with multithreaded processing to ensure zero freezing.
+  - **Modern GUI**: Built with `customtkinter`, featuring a dark-mode tabbed workspace that separates similarity and extraction workflows while keeping long-running ML work on background threads.
   - **Pro CLI**: Built with `rich`, featuring an interactive menu for single comparison, automated batch similarity scanning, batch face extraction, and regex-first keyword search with fuzzy fallback.
 - **Batch Face Extraction**: Automatically find and crop faces from source images (e.g., driver's licenses) found in recursive folder structures.
 - **Accurate Mathematics**: Internally converts DeepFace's raw cosine distance into a human-readable 0-100% percentage grade, matching industry-standard strictness (where a score of >= 80% represents a match).
@@ -42,6 +42,8 @@ source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements.txt
 python main.py              # Launch GUI
 python main.py --cli        # Launch CLI
+python main.py --mode similarity --root /path/to/root --yes
+python main.py --mode extract --root /path/to/root --yes
 ```
 
 ## Batch Processing Usage (CLI)
