@@ -54,6 +54,7 @@ Explicit compare mode requires both `--img1` and `--img2`. CLI configuration ove
 ## Batch Processing Usage (CLI)
 1. Run the CLI launcher (`run_cli.bat` or `run_cli.command`).
 2. The interactive sections menu will appear with **Similarity**, **Extraction**, **Settings**, and **Exit**.
+   - From this top-level menu, choose **1** to enter the Similarity submenu or **2** to enter the Extraction submenu.
 3. **Face Extraction**: 
    - Choose **Settings** first if your source images are not named "front".
    - Then choose **Extraction** then **Batch Face Extraction**.
