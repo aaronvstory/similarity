@@ -3,7 +3,7 @@ import threading
 import json
 import logging
 from tkinter import filedialog
-from typing import Optional
+from typing import Optional, Tuple
 
 import customtkinter as ctk
 from PIL import Image
@@ -289,6 +289,18 @@ class ModernGUI(DnDCTk):
     def _is_supported_image_file(self, file_path: str) -> bool:
         return os.path.splitext(file_path)[1].lower() in SUPPORTED_IMAGE_EXTENSIONS
 
+    def _fit_preview_size(self, width: int, height: int, max_width: int, max_height: int) -> Tuple[int, int]:
+        if width <= 0 or height <= 0:
+            return max_width, max_height
+        scale = min(max_width / width, max_height / height, 1.0)
+        fitted_width = max(1, min(max_width, int(round(width * scale))))
+        fitted_height = max(1, min(max_height, int(round(height * scale))))
+        return fitted_width, fitted_height
+
+    def _build_preview_image(self, img: Image.Image, max_width: int, max_height: int) -> ctk.CTkImage:
+        fitted_size = self._fit_preview_size(img.size[0], img.size[1], max_width, max_height)
+        return ctk.CTkImage(light_image=img, dark_image=img, size=fitted_size)
+
     def _load_similarity_image(self, file_path: str, zone: int):
         if not os.path.isfile(file_path):
             self.sim_result_label.configure(text=f"Error loading image: file not found ({file_path})", text_color="red")
@@ -303,7 +315,7 @@ class ModernGUI(DnDCTk):
         try:
             with Image.open(file_path) as opened:
                 img = opened.copy()
-            ctk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(250, 250))
+            ctk_image = self._build_preview_image(img, max_width=250, max_height=250)
 
             if zone == 1:
                 self.img1_path = file_path
@@ -330,7 +342,7 @@ class ModernGUI(DnDCTk):
         try:
             with Image.open(file_path) as opened:
                 img = opened.copy()
-            ctk_image = ctk.CTkImage(light_image=img, dark_image=img, size=(300, 300))
+            ctk_image = self._build_preview_image(img, max_width=300, max_height=300)
             self.extraction_src_path = file_path
             self.extraction_out_path = self._resolve_extracted_output_path(file_path)
             self.ext_display.configure(image=ctk_image, text="")

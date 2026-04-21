@@ -160,6 +160,9 @@ class _ThreadCaptureBase:
 
 
 class _ImageOpenStub:
+    def __init__(self, size=(1000, 1000)):
+        self.size = size
+
     def __enter__(self):
         return self
 
@@ -167,7 +170,7 @@ class _ImageOpenStub:
         return False
 
     def copy(self):
-        return object()
+        return types.SimpleNamespace(size=self.size)
 
 
 class TestModernGUI(unittest.TestCase):
@@ -272,6 +275,7 @@ class TestModernGUI(unittest.TestCase):
         self.assertEqual(app.img1_path, "C:\\tmp\\photo one.jpg")
         self.assertEqual(app.img1_display.text, "")
         self.assertIsNotNone(app.img1_display.image)
+        self.assertEqual(app.img1_display.image.kwargs["size"], (250, 250))
 
     def test_drop_extraction_image_updates_source_and_output(self) -> None:
         app = self.gui_module.ModernGUI()
@@ -302,6 +306,28 @@ class TestModernGUI(unittest.TestCase):
             app.upload_image(2)
         self.assertEqual(app.img2_path, "C:/tmp/picked.webp")
         self.assertIsNotNone(app.img2_display.image)
+        self.assertEqual(app.img2_display.image.kwargs["size"], (250, 250))
+
+    def test_upload_image_button_preserves_aspect_ratio(self) -> None:
+        app = self.gui_module.ModernGUI()
+        with (
+            patch("src.gui.filedialog.askopenfilename", return_value="C:/tmp/wide.jpg"),
+            patch("src.gui.os.path.isfile", return_value=True),
+            patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub(size=(1200, 600))),
+        ):
+            app.upload_image(1)
+        self.assertEqual(app.img1_display.image.kwargs["size"], (250, 125))
+
+    def test_drop_extraction_image_preserves_aspect_ratio(self) -> None:
+        app = self.gui_module.ModernGUI()
+        event = types.SimpleNamespace(data="C:/tmp/tall.png")
+        with (
+            patch("src.gui.os.path.isfile", return_value=True),
+            patch("src.gui.os.path.exists", return_value=False),
+            patch.object(self.gui_module.Image, "open", return_value=_ImageOpenStub(size=(600, 1200))),
+        ):
+            app._on_drop_extraction_source(event)
+        self.assertEqual(app.ext_display.image.kwargs["size"], (150, 300))
 
     def test_start_comparison_spawns_daemon_worker_and_updates_status(self) -> None:
         app = self.gui_module.ModernGUI()
