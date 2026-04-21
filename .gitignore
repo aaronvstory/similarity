@@ -14,3 +14,4 @@ src/models/
 
 # Local-only workspace files
 .DS_Store
+config.json

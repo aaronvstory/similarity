@@ -180,12 +180,16 @@ class FaceEngine:
             faces1 = DeepFace.extract_faces(
                 img_path=img1_path, 
                 detector_backend=self.detector_backend, 
-                enforce_detection=True
+                enforce_detection=True,
+                normalize_face=False,
+                color_face="bgr",
             )
             faces2 = DeepFace.extract_faces(
                 img_path=img2_path, 
                 detector_backend=self.detector_backend, 
-                enforce_detection=True
+                enforce_detection=True,
+                normalize_face=False,
+                color_face="bgr",
             )
 
             face1 = self._select_prominent_face(faces1, "image 1")

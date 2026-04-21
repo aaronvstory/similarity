@@ -23,6 +23,7 @@ class ProCLI:
     Command Line Interface for the Face Similarity Application.
     Uses 'rich' for elegant and professional terminal outputs.
     """
+    VALID_EXISTING_FILE_MODES = ("index", "skip", "overwrite")
 
     def __init__(self):
         self.engine = FaceEngine()
@@ -43,11 +44,40 @@ class ProCLI:
     def load_config(self):
         if os.path.exists(self.config_path):
             try:
-                with open(self.config_path, "r") as f:
+                with open(self.config_path, "r", encoding="utf-8") as f:
                     saved_config = json.load(f)
-                    self.config.update(saved_config)
             except Exception as e:
                 console.print(f"[yellow]Warning: Could not load config.json ({e}). Using defaults.[/yellow]")
+                return
+
+            if not isinstance(saved_config, dict):
+                console.print("[yellow]Warning: config.json must contain a JSON object. Using defaults.[/yellow]")
+                return
+
+            for key in ("img1_keyword", "img2_keyword", "extraction_keyword"):
+                value = saved_config.get(key)
+                if isinstance(value, str) and value.strip():
+                    self.config[key] = value
+                elif key in saved_config:
+                    console.print(f"[yellow]Warning: Invalid `{key}` in config.json. Keeping default.[/yellow]")
+
+            if "padding_ratio" in saved_config:
+                try:
+                    self.config["padding_ratio"] = float(saved_config["padding_ratio"])
+                except (TypeError, ValueError):
+                    console.print("[yellow]Warning: Invalid `padding_ratio` in config.json. Keeping default.[/yellow]")
+
+            mode = saved_config.get("existing_file_mode")
+            if mode is None:
+                return
+
+            if mode in self.VALID_EXISTING_FILE_MODES:
+                self.config["existing_file_mode"] = mode
+            else:
+                self.config["existing_file_mode"] = "index"
+                console.print(
+                    "[yellow]Warning: Invalid `existing_file_mode` in config.json; defaulting to 'index'.[/yellow]"
+                )
 
     def save_config(self):
         try:
@@ -156,7 +186,7 @@ class ProCLI:
 
         self.config["existing_file_mode"] = Prompt.ask(
             "Mode for existing extracted files", 
-            choices=["index", "skip", "overwrite"], 
+            choices=list(self.VALID_EXISTING_FILE_MODES), 
             default=self.config["existing_file_mode"]
         )
         
@@ -168,11 +198,15 @@ class ProCLI:
         if not img1_path:
             console.print("[yellow]Please select the first image...[/yellow]")
             img1_path = self.prompt_for_file("Select First Image")
-            if not img1_path: return
+            if not img1_path:
+                console.print("[yellow]Action cancelled. No first image selected.[/yellow]")
+                return
         if not img2_path:
             console.print("[yellow]Please select the second image...[/yellow]")
             img2_path = self.prompt_for_file("Select Second Image")
-            if not img2_path: return
+            if not img2_path:
+                console.print("[yellow]Action cancelled. No second image selected.[/yellow]")
+                return
 
         self._ensure_models_initialized()
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True, console=console) as progress:
@@ -194,7 +228,9 @@ class ProCLI:
     def _run_single_extraction(self):
         console.print("[yellow]Please select the source image for face extraction...[/yellow]")
         img_path = self.prompt_for_file("Select Image for Extraction")
-        if not img_path: return
+        if not img_path:
+            console.print("[yellow]Action cancelled. No source image selected.[/yellow]")
+            return
 
         dirpath = os.path.dirname(img_path)
         filename = os.path.basename(img_path)
@@ -229,24 +265,35 @@ class ProCLI:
         ext = os.path.splitext(filename)[1]
         base_name = "extracted"
         target_path = os.path.join(dirpath, f"{base_name}{ext}")
+        source_path = os.path.join(dirpath, filename)
         
         mode = self.config["existing_file_mode"]
+        if mode not in self.VALID_EXISTING_FILE_MODES:
+            mode = "index"
+            self.config["existing_file_mode"] = mode
+            console.print(
+                "[yellow]Warning: Invalid `existing_file_mode` in config; defaulting to 'index'.[/yellow]"
+            )
+
+        # Avoid overwriting the source file when it already matches extracted.*.
+        source_norm = os.path.normcase(os.path.normpath(source_path))
+        target_norm = os.path.normcase(os.path.normpath(target_path))
+        force_index = source_norm == target_norm
         
         if not os.path.exists(target_path):
             return target_path
             
-        if mode == "skip":
+        if mode == "skip" and not force_index:
             return None
-        elif mode == "overwrite":
+        if mode == "overwrite" and not force_index:
             return target_path
-        elif mode == "index":
-            idx = 2
-            while True:
-                new_path = os.path.join(dirpath, f"{base_name}{idx}{ext}")
-                if not os.path.exists(new_path):
-                    return new_path
-                idx += 1
-        return target_path
+
+        idx = 2
+        while True:
+            new_path = os.path.join(dirpath, f"{base_name}{idx}{ext}")
+            if not os.path.exists(new_path):
+                return new_path
+            idx += 1
 
     def _log_to_manifest(self, root_dir: str, op_type: str, results: List[Dict[str, Any]]):
         manifest_path = os.path.join(root_dir, "manifest.json")
@@ -254,9 +301,14 @@ class ProCLI:
         
         if os.path.exists(manifest_path):
             try:
-                with open(manifest_path, "r") as f:
-                    data = json.load(f)
-            except: pass
+                with open(manifest_path, "r", encoding="utf-8") as f:
+                    loaded_data = json.load(f)
+                if isinstance(loaded_data, dict) and isinstance(loaded_data.get("operations"), list):
+                    data = loaded_data
+                else:
+                    console.print("[yellow]Warning: manifest.json has an invalid structure. Reinitializing operations list.[/yellow]")
+            except (json.JSONDecodeError, OSError, ValueError) as e:
+                console.print(f"[yellow]Warning: Could not read manifest.json ({e}). Starting with a new manifest structure.[/yellow]")
             
         new_op = {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -264,10 +316,12 @@ class ProCLI:
             "config": self.config.copy(),
             "results": results
         }
+        if not isinstance(data.get("operations"), list):
+            data["operations"] = []
         data["operations"].append(new_op)
         
         try:
-            with open(manifest_path, "w") as f:
+            with open(manifest_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=4)
         except Exception as e:
             console.print(f"[red]Failed to write manifest: {e}[/red]")
@@ -275,7 +329,9 @@ class ProCLI:
     def _run_batch_extraction(self):
         console.print("[yellow]Please select the root directory for batch extraction...[/yellow]")
         root_dir = self.prompt_for_directory("Select Root Directory")
-        if not root_dir: return
+        if not root_dir:
+            console.print("[yellow]Action cancelled. No root directory selected.[/yellow]")
+            return
 
         console.print(f"Scanning directory recursively: [green]{root_dir}[/green]")
         
@@ -292,12 +348,15 @@ class ProCLI:
             return
 
         console.print(f"Found [bold]{len(folders_to_process)}[/bold] images to process.")
-        if not Confirm.ask("Proceed?"): return
+        if not Confirm.ask("Proceed?"):
+            return
 
         self._ensure_models_initialized()
         results_table = Table(title="Batch Extraction Results")
-        results_table.add_column("Folder", style="cyan"); results_table.add_column("Source", style="green")
-        results_table.add_column("Confidence", justify="right"); results_table.add_column("Status")
+        results_table.add_column("Folder", style="cyan")
+        results_table.add_column("Source", style="green")
+        results_table.add_column("Confidence", justify="right")
+        results_table.add_column("Status")
 
         op_results = []
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn(), console=console) as progress:
@@ -395,24 +454,37 @@ class ProCLI:
     def _run_batch_processing(self):
         console.print("[yellow]Please select root for similarity check...[/yellow]")
         root_dir = self.prompt_for_directory("Select Root Directory")
-        if not root_dir: return
+        if not root_dir:
+            console.print("[yellow]Action cancelled. No root directory selected.[/yellow]")
+            return
 
         folders_to_process = []
         for dirpath, dirnames, filenames in os.walk(root_dir):
             img1 = self._find_image_with_keyword(dirpath, self.config["img1_keyword"])
             img2 = self._find_image_with_keyword(dirpath, self.config["img2_keyword"])
-            if img1 and img2: folders_to_process.append((dirpath, img1, img2))
+            if img1 and img2:
+                folders_to_process.append((dirpath, img1, img2))
+
+        # Process deeper folders first so parent renames do not break child paths.
+        folders_to_process.sort(
+            key=lambda item: item[0].count(os.sep),
+            reverse=True,
+        )
 
         if not folders_to_process:
             console.print("[yellow]No folders matched keywords.[/yellow]")
             return
 
         console.print(f"Found [bold]{len(folders_to_process)}[/bold] folders. Proceed?")
-        if not Confirm.ask("Confirm"): return
+        if not Confirm.ask("Proceed?"):
+            return
 
         self._ensure_models_initialized()
         results_table = Table(title="Batch Similarity Results")
-        results_table.add_column("Folder"); results_table.add_column("Score"); results_table.add_column("Match"); results_table.add_column("Status")
+        results_table.add_column("Folder")
+        results_table.add_column("Score")
+        results_table.add_column("Match")
+        results_table.add_column("Status")
 
         op_results = []
         with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), BarColumn(), TaskProgressColumn(), console=console) as progress:

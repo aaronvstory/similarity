@@ -50,7 +50,8 @@ python main.py --cli        # Launch CLI
 3. **Face Extraction**: 
    - Choose **Option 4 (Batch Face Extraction)**.
    - Choose **Option 5 (Settings)** first if your source images are not named "front".
-   - Select the root folder. The app will find "front.jpg" (or similar), crop the face, and save it as "extracted.jpg" in the same folder, skipping if it already exists.
+   - Select the root folder. The app will find "front.jpg" (or similar), crop the face, and save it as "extracted.jpg" in the same folder.
+   - By default (`existing_file_mode = "index"`), if `extracted.jpg` already exists it writes `extracted2.jpg` (then `extracted3.jpg`, etc.). It only skips when Settings sets mode to `skip`.
 4. **Similarity Check**:
    - Choose **Option 2 (Batch Folder Similarity Check)**.
    - Choose **Option 5 (Settings)** first if your images are not named "extracted" and "selfie".
@@ -63,4 +64,4 @@ python main.py --cli        # Launch CLI
 - **Metric**: Cosine Distance
 
 ## Contribution
-Check `agents.md` and `claude.md` for AI context if you are utilizing LLMs to contribute to this codebase. See `CHANGELOG.md` for recent updates.
+See `CONTRIBUTING.md` for workflow, architecture, dependency, UX, and testing guidance. Check `agents.md` and `claude.md` for AI context if you are utilizing LLMs to contribute to this codebase. See `CHANGELOG.md` for recent updates.

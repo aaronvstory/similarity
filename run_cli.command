@@ -14,7 +14,7 @@ fi
 # Check if .venv exists
 if [ ! -f ".venv/bin/activate" ]; then
     echo "[INFO] Virtual environment not found. Creating one..."
-    python3.11 -m venv .venv
+    python3 -m venv .venv
     if [ $? -ne 0 ]; then
         echo "[ERROR] Failed to create virtual environment."
         read -p "Press Enter to exit..."
