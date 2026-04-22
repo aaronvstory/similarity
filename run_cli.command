@@ -11,7 +11,8 @@ PY
 }
 
 pick_python() {
-    for candidate in python3.11 python3.10 python3.12 python3 /usr/bin/python3; do
+    local candidates="${SIMILARITY_PYTHON_CANDIDATES:-python3.11 python3.10 python3.12 python3 /usr/bin/python3}"
+    for candidate in $candidates; do
         if ! command -v "$candidate" >/dev/null 2>&1; then
             continue
         fi
@@ -32,6 +33,11 @@ if ! PYTHON_BIN="$(pick_python)"; then
     exit 1
 fi
 echo "[INFO] Using Python: $PYTHON_BIN"
+
+if [ "${SIMILARITY_LAUNCHER_DRY_RUN:-0}" = "1" ]; then
+    echo "[INFO] Dry run mode enabled; skipping venv setup and app launch."
+    exit 0
+fi
 
 ensure_venv() {
     local needs_rebuild="false"
