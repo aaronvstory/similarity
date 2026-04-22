@@ -289,7 +289,10 @@ class ModernGUI(DnDCTk):
         return paths
 
     def _is_ui_enabled(self) -> bool:
-        return getattr(self.btn_upload1, "state", "disabled") == "normal"
+        try:
+            return self.btn_upload1.cget("state") == "normal"
+        except Exception:
+            return False
 
     def _is_supported_image_file(self, file_path: str) -> bool:
         return os.path.splitext(file_path)[1].lower() in SUPPORTED_IMAGE_EXTENSIONS

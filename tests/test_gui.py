@@ -58,6 +58,11 @@ class _WidgetStub:
         if "image" in kwargs:
             self.image = kwargs["image"]
 
+    def cget(self, key):
+        if key == "state":
+            return self.state
+        return self.kwargs.get(key)
+
     def set(self, value):
         self.value = value
 
@@ -363,6 +368,16 @@ class TestModernGUI(unittest.TestCase):
             app._on_drop_similarity_image1(event)
         self.assertEqual(app.img1_path, "C:/tmp/current.png")
         self.assertIn("wait for the current task", app.sim_result_label.text.lower())
+
+    def test_drop_works_after_ui_enabled(self) -> None:
+        app = self.gui_module.ModernGUI()
+        app._on_models_ready()
+        event = types.SimpleNamespace(data="C:/tmp/new.png")
+        with patch("src.gui.os.path.isfile", return_value=True), patch.object(
+            self.gui_module.Image, "open", return_value=_ImageOpenStub()
+        ):
+            app._on_drop_similarity_image1(event)
+        self.assertEqual(app.img1_path, os.path.normpath("C:/tmp/new.png"))
 
     def test_start_comparison_spawns_daemon_worker_and_updates_status(self) -> None:
         app = self.gui_module.ModernGUI()
